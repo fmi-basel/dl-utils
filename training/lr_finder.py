@@ -104,10 +104,17 @@ def lr_finder_plot(learning_rates, losses, sigma=1, axarr=None):
     axarr[1].plot(learning_rates, diff_loss, color=color)
 
     for ax in axarr:
-        ax.axvline(estimate, color=color)
+        ax.axvline(estimate, color='black', linewidth=1)
+
+    axarr[0].set_ylabel('Loss')
+    axarr[1].set_ylabel('dLoss/dLR')
+    plt.suptitle('Suggested learning rate: {:1.3e}'.format(
+        estimate))
 
     axarr[0].set_xscale('log')
-    plt.tight_layout()
+    for ax in axarr:
+        ax.grid(True, 'major', color='darkgrey')
+    plt.tight_layout(rect=[0, 0, 1., 0.9])
     return axarr
 
 
@@ -142,8 +149,13 @@ def suggest_lr(learning_rates, losses, sigma):
     return learning_rates[idx]
 
 
-def lr_finder(model, dataset_generator, steps, base_lr, max_lr,
-              reps=1, verbose=0,
+def lr_finder(model,
+              dataset_generator,
+              steps,
+              base_lr,
+              max_lr,
+              reps=1,
+              verbose=0,
               **kwargs):
     '''functional interface to LRFinderCallback.
 
