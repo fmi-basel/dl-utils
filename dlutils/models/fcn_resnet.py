@@ -8,7 +8,7 @@ from keras.layers import ZeroPadding2D
 
 from keras.applications.resnet50 import ResNet50, identity_block, conv_block
 
-from models.utils import get_crop_shape
+from dlutils.models.utils import get_crop_shape
 import numpy as np
 
 
@@ -74,23 +74,20 @@ def ResnetBase(input_shape,
                 name='UP{:02}_CRPY'.format(level))(y)
         x = concatenate([x, y], axis=3, name='UP{:02}_CONC'.format(level))
 
-        # TODO add shortcut.
         features = [no_features / 4, no_features / 4, no_features]
 
         x = conv_block(
             x, 3, features, stage=5 + level, block=blocks[0], strides=1)
-        print x.shape
         for block in xrange(1, n_decoding_blocks):
             x = identity_block(
                 x, 3, features, stage=5 + level, block=blocks[block])
 
-    model = Model(inputs=base_model.input, outputs=x)
+    final_model = Model(inputs=base_model.input, outputs=x)
 
     if weight_file is not None:
-        logger.info('Loading weights from :{}', weight_file)
-        model.load_weights(weight_file)
+        final_model.load_weights(weight_file)
 
-    return model
+    return final_model
 
 
 if __name__ == '__main__':
