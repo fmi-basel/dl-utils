@@ -19,14 +19,15 @@ class LazyTrainingHandle(dict):
     def get_random_patch(self, patch_size, **augmentation_params):
         '''
         '''
-        return dict(zip(
-            self.get_input_keys() + self.get_output_keys(), get_random_patch(
-            [
-                self[key]
-                for key in self.get_input_keys() + self.get_output_keys()
-            ],
-            patch_size=patch_size,
-            **augmentation_params)))
+        return dict(
+            zip(self.get_input_keys() + self.get_output_keys(),
+                get_random_patch(
+                    [
+                        self[key] for key in
+                        self.get_input_keys() + self.get_output_keys()
+                    ],
+                    patch_size=patch_size,
+                    **augmentation_params)))
 
     def get_input_keys(self):
         '''returns a list of input keys

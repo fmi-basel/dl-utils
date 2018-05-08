@@ -14,7 +14,7 @@ class StitchingGenerator(Sequence):
         self.image = image
         self.batch_size = batch_size
         self.patch_size = patch_size
-        self.border = border
+        self.border = border if batch_size is not None else 1
         self.calc_corners()
 
     def __len__(self):
