@@ -23,6 +23,11 @@ def ResnetBase(input_shape,
     if input_shape is None:
         input_shape = (224, 224, 3)
 
+    if input_shape[0] <= 224 or input_shape[1] <= 224:
+        raise ValueError(
+            'input_shape of ResNet needs to be at least 224x244. Given input_shape={}'.format(
+                input_shape))
+
     # reasonable layers to truncate: 10, 22, 40, 49
     truncate_layer = '40'
 

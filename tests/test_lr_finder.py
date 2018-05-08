@@ -1,4 +1,4 @@
-from training.lr_finder import lr_finder
+from dlutils.training.lr_finder import lr_finder
 
 from keras.datasets import mnist
 

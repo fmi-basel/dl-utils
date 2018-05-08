@@ -2,12 +2,23 @@ from dlutils.models.unet import UnetBase
 from dlutils.models.utils import add_fcn_output_layers
 
 import numpy as np
+import pytest
 
 
-def main():
+@pytest.yield_fixture(autouse=True)
+def cleanup():
     '''
     '''
-    input_shape = (512, 512, 1)
+    # make sure models are gone after each test.
+    from keras.backend import clear_session
+    clear_session()
+
+
+@pytest.mark.parametrize("input_shape", [
+    (250, 250, 1), (250, 271, 1)])
+def test_unet_setup(input_shape):
+    '''
+    '''
     batch_size = 3
 
     model = UnetBase(input_shape=input_shape, with_bn=True, dropout=0.5)
@@ -31,7 +42,6 @@ def main():
     for name, pred in zip(pred_names, pred):
         # TODO include check for proper dimensionality.
         print name, pred.shape
-
 
 
 if __name__ == '__main__':
