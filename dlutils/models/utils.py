@@ -47,3 +47,21 @@ def get_crop_shape(x_shape, y_shape):
         else:
             shape.append((int(delta / 2), int(delta / 2)))
     return shape
+
+
+def get_batch_size(model):
+    '''
+    '''
+    return model.input_shape[0]
+
+
+def get_patch_size(model):
+    '''
+    '''
+    return model.input_shape[1:-1]
+
+
+def get_input_channels(model):
+    '''
+    '''
+    return model.input_shape[-1]
