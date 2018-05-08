@@ -2,7 +2,7 @@ from keras.utils import Sequence
 
 import numpy as np
 
-from training import get_random_patch
+from dlutils.training.sampling import get_random_patch
 
 
 class LazyTrainingHandle(dict):
@@ -19,21 +19,20 @@ class LazyTrainingHandle(dict):
     def get_random_patch(self, patch_size, **augmentation_params):
         '''
         '''
-        return get_random_patch(
+        return dict(zip(
+            self.get_input_keys() + self.get_output_keys(), get_random_patch(
             [
                 self[key]
                 for key in self.get_input_keys() + self.get_output_keys()
             ],
             patch_size=patch_size,
-            **augmentation_params)
+            **augmentation_params)))
 
-    @staticmethod
     def get_input_keys(self):
         '''returns a list of input keys
         '''
         raise NotImplementedError('implement input keys for your dataset!')
 
-    @staticmethod
     def get_output_keys(self):
         '''returns a list of output keys
         '''
@@ -56,6 +55,7 @@ class TrainingGenerator(Sequence):
         self.patch_size = patch_size
         self.batch_size = batch_size
         self.handles = handles
+        self.augmentation_params = dict()
 
     def __len__(self):
         return int(len(self.handles) / float(self.batch_size))
@@ -67,7 +67,12 @@ class TrainingGenerator(Sequence):
         assert idx < len(self)
 
         inputs = dict()
+        for key in self.handles[0].get_input_keys():
+            inputs[key] = []
+
         outputs = dict()
+        for key in self.handles[0].get_output_keys():
+            outputs[key] = []
 
         for handle in self.handles[idx * self.batch_size:(
                 idx + 1) * self.batch_size]:
@@ -79,6 +84,8 @@ class TrainingGenerator(Sequence):
                 inputs[key].append(patches[key])
             for key in outputs.iterkeys():
                 outputs[key].append(patches[key])
+
+            handle.clean()
 
         # Turn each list into a numpy array
         for key in inputs.iterkeys():
