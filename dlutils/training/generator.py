@@ -38,6 +38,13 @@ class LazyTrainingHandle(dict):
         '''
         raise NotImplementedError('implement output keys for your dataset!')
 
+    def clear(self):
+        '''clears any input/output data attributes.
+
+        '''
+        for key in self.get_input_keys() + self.get_output_keys():
+            self[key] = None
+
 
 class TrainingGenerator(Sequence):
     '''generates random patches from a set of training images and
@@ -49,12 +56,13 @@ class TrainingGenerator(Sequence):
 
     '''
 
-    def __init__(self, handles, patch_size, batch_size, seed=None):
+    def __init__(self, handles, patch_size, batch_size, seed=None, buffer=False):
         '''
         '''
         self.patch_size = patch_size
         self.batch_size = batch_size
         self.handles = handles
+        self.buffer = buffer
         self.augmentation_params = dict()
 
     def __len__(self):
@@ -85,7 +93,8 @@ class TrainingGenerator(Sequence):
             for key in outputs.iterkeys():
                 outputs[key].append(patches[key])
 
-            handle.clean()
+            if not self.buffer:
+                handle.clear()
 
         # Turn each list into a numpy array
         for key in inputs.iterkeys():
