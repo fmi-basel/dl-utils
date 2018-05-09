@@ -34,7 +34,7 @@ def get_random_patch(channels,
     # sample from all channels
     patch_coord = get_random_patch_corner(channels[0].shape, patch_size)
     slices = [slice(x, x + dx) for x, dx in zip(patch_coord, patch_size)]
-    patches = [channel[slices[0], slices[1], ...] for channel in channels]
+    patches = [channel[slices] for channel in channels]
 
     # post-sampling augmentations
     if horizontal_flip:
