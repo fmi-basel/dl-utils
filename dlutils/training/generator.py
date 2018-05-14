@@ -57,23 +57,27 @@ class TrainingGenerator(Sequence):
 
     '''
 
-    def __init__(self, handles, patch_size, batch_size, seed=None, buffer=False):
+    def __init__(self, handles, patch_size, batch_size, seed=None, buffer=False, samples_per_handle=1):
         '''
         '''
         self.patch_size = patch_size
         self.batch_size = batch_size
         self.handles = handles
+        self.samples_per_handle = samples_per_handle
         self.buffer = buffer
         self.augmentation_params = dict()
 
     def __len__(self):
-        return int(len(self.handles) / float(self.batch_size))
+        return int((len(self.handles) * self.samples_per_handle) / float(self.batch_size))
 
     def __getitem__(self, idx):
         '''return idx-th batch of size batch_size
 
         '''
-        assert idx < len(self)
+        if idx >= len(self):
+            raise IndexError('Index out of bounds {} >= {}'.format(idx, len(self)))
+
+        idx = idx % len(self.handles)
 
         inputs = dict()
         for key in self.handles[0].get_input_keys():
