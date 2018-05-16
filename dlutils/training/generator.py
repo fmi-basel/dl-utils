@@ -105,7 +105,6 @@ class TrainingGenerator(Sequence):
             handle.load()  # make sure data is available.
             patches = handle.get_random_patch(self.patch_size,
                                               **self.augmentation_params)
-            print ',',
 
             for key in inputs.iterkeys():
                 inputs[key].append(patches[key])
