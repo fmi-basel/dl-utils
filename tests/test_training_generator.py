@@ -3,6 +3,17 @@ from dlutils.training.generator import LazyTrainingHandle
 
 import numpy as np
 
+import pytest
+
+
+@pytest.yield_fixture(autouse=True)
+def cleanup():
+    '''
+    '''
+    # make sure models are gone after each test.
+    from keras.backend import clear_session
+    clear_session()
+
 
 class Handle(LazyTrainingHandle):
     '''
@@ -34,17 +45,18 @@ class Handle(LazyTrainingHandle):
             self[key] = None
 
 
-def test_2d_sampler():
+@pytest.mark.parametrize("n_handles,samples_per_handle,batch_size",
+                         [(100, 1, 7), (3, 20, 10), (19, 4, 75)])
+def test_2d_sampler(n_handles, samples_per_handle, batch_size):
     '''
     '''
-
-    n_handles = 5
+    n_channels = 1
     img_shape = (500, 500)
     patch_size = (64, 64)
-    batch_size = 5
-    samples_per_handle = 5
 
-    handles = [Handle(shape=img_shape) for _ in xrange(n_handles)]
+    handles = [
+        Handle(shape=img_shape + (n_channels, )) for _ in xrange(n_handles)
+    ]
 
     generator = TrainingGenerator(
         handles,
@@ -56,15 +68,25 @@ def test_2d_sampler():
     assert len(generator) == expected_length
     assert len(generator) > 0
 
-    # TODO fix issue that len(..) == 0 is possible with len(handles) > 0
+    # Check batch dimensions
+    for batch_idx in xrange(expected_length):
+        in_batch, out_batch = generator[0]
 
-    # check first and last batch
-    in_batch, out_batch = generator[0]
-    assert in_batch.keys()[0] == 'input'
-    assert all(
-        x == y
-        for x, y in zip(in_batch['input'].shape,
-                        [batch_size, patch_size[0], patch_size[1], 1]))
+        print in_batch['input'].shape,
+        expected_shape = (batch_size, patch_size[0], patch_size[1], n_channels)
+        assert in_batch.keys()[0] == 'input'
+
+        for key, val in in_batch.iteritems():
+            np.testing.assert_equal(
+                val.shape, expected_shape,
+                'Shapes of {} are mismatching: {} != {}'.format(
+                    key, in_batch[key].shape, expected_shape))
+
+        for key, val in out_batch.iteritems():
+            np.testing.assert_equal(
+                val.shape, expected_shape,
+                'Shapes of {} are mismatching: {} != {}'.format(
+                    key, val.shape, expected_shape))
 
 
 if __name__ == '__main__':
