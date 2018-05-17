@@ -1,7 +1,5 @@
 import numpy as np
 
-from augmentations import flip_axis
-
 
 def get_random_patch_corner(img_shape, patch_size):
     '''get the corner coordinate of a random patch
@@ -19,12 +17,7 @@ def get_random_patch_corner(img_shape, patch_size):
     return coordinate
 
 
-def get_random_patch(channels,
-                     patch_size,
-                     horizontal_flip=False,
-                     vertical_flip=False,
-                     intensity_scale=None,
-                     intensity_shift=None):
+def get_random_patch(channels, patch_size, augmentator=None):
     '''sample a random patch from all given channels.
 
     channels : list of 2D images
@@ -32,30 +25,18 @@ def get_random_patch(channels,
     assert isinstance(channels, list)
 
     # TODO consider pre-sampling augmentations
+    if augmentator is not None:
+        pass
 
     # sample from all channels
     patch_coord = get_random_patch_corner(channels[0].shape, patch_size)
     slices = [slice(x, x + dx) for x, dx in zip(patch_coord, patch_size)]
     patches = [channel[slices] for channel in channels]
 
-    # post-sampling augmentations
-    if horizontal_flip:
-        if np.random.random() < 0.5:
-            for idx, patch in enumerate(patches):
-                patches[idx] = flip_axis(patch, 1)
-
-    if vertical_flip:
-        if np.random.random() < 0.5:
-            for idx, patch in enumerate(patches):
-                patches[idx] = flip_axis(patch, 0)
-
-    dtype = patches[0].dtype
-    if intensity_scale is not None:
-        scale = 1 + (np.random.randn(1) * intensity_scale)
-        patches[0] = (scale * patches[0]).astype(dtype)
-
-    if intensity_shift is not None:
-        shift = np.random.randn(1) * intensity_shift
-        patches[0] = patches[0] + (patches[0].mean() * shift).astype(dtype)
+    # # post-sampling augmentations
+    if augmentator is not None:
+        patches[0], patches[1:] = augmentator.post_sampling_augmentation(
+            inputs=[patches[0], ], targets=patches[1:])
+        patches[0] = patches[0][0]
 
     return patches

@@ -16,7 +16,7 @@ class LazyTrainingHandle(dict):
     def load(self, **kwargs):
         raise NotImplementedError('Implement load(..) for your dataset!')
 
-    def get_random_patch(self, patch_size, **augmentation_params):
+    def get_random_patch(self, patch_size, augmentator=None):
         '''
         '''
         return dict(
@@ -27,7 +27,8 @@ class LazyTrainingHandle(dict):
                         self.get_input_keys() + self.get_output_keys()
                     ],
                     patch_size=patch_size,
-                    **augmentation_params)))
+                    augmentator=augmentator
+                    )))
 
     def get_input_keys(self):
         '''returns a list of input keys
@@ -65,7 +66,8 @@ class TrainingGenerator(Sequence):
                  batch_size,
                  seed=None,
                  buffer=False,
-                 samples_per_handle=1):
+                 samples_per_handle=1,
+                 augmentator=None):
         '''
         '''
         self.patch_size = patch_size
@@ -73,7 +75,7 @@ class TrainingGenerator(Sequence):
         self.handles = handles
         self.samples_per_handle = samples_per_handle
         self.buffer = buffer
-        self.augmentation_params = dict()
+        self.augmentator = augmentator
 
         if len(self) <= 0:
             print len(self.handles) * self.samples_per_handle, self.batch_size
@@ -104,7 +106,7 @@ class TrainingGenerator(Sequence):
                        for idx in xrange(self.batch_size)):
             handle.load()  # make sure data is available.
             patches = handle.get_random_patch(self.patch_size,
-                                              **self.augmentation_params)
+                                              self.augmentator)
 
             for key in inputs.iterkeys():
                 inputs[key].append(patches[key])
