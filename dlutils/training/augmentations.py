@@ -77,8 +77,14 @@ def transform_matrix_offset(matrix, shape):
 def apply_transform(x, transform):
     '''
     '''
+    isbool = x.dtype == bool
+    if isbool:
+        x = x.astype(np.float32)
     transform = transform_matrix_offset(transform, x.shape)
-    return affine_transform(x, transform, mode='nearest')
+    x = affine_transform(x, transform, mode='nearest')
+    if isbool:
+        x = x >= 0.5
+    return x
 
 
 def draw(dist):
