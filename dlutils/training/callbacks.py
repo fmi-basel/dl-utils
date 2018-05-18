@@ -25,8 +25,8 @@ def create_callbacks(outdir, nth_checkpoint, lr, epochs):
             os.path.join(outdir, 'tensorboard-logs'),
             write_graph=True,
             write_grads=False,
-            write_images=True,
-            histogram_freq=nth_checkpoint),
+            write_images=False,
+            histogram_freq=0),
         LearningRateScheduler(
             CosineAnnealingSchedule(
                 lr_max=lr, lr_min=0.05 * lr, epoch_max=epochs))
