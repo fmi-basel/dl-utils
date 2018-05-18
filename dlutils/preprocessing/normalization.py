@@ -11,5 +11,4 @@ def normalize(img, offset=0, scale=1, min_std=0.):
         std = min_std
 
     mean = img.mean()
-    return (np.tanh(0.05 *
-                    (img - mean) / std)) * scale + offset
+    return (np.tanh((img - mean) / std)) * scale + offset
