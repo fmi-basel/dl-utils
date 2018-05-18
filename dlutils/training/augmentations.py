@@ -81,7 +81,7 @@ def apply_transform(x, transform):
     if isbool:
         x = x.astype(np.float32)
     transform = transform_matrix_offset(transform, x.shape)
-    x = affine_transform(x, transform, mode='nearest')
+    x = affine_transform(x, transform, mode='reflect')
     if isbool:
         x = x >= 0.5
     return x
