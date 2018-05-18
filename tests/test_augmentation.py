@@ -4,9 +4,12 @@ from dlutils.training.augmentations import apply_transform
 from dlutils.training.augmentations import get_rotation_transform
 from dlutils.training.augmentations import get_shear_transform
 from dlutils.training.augmentations import get_combined_transform
+from dlutils.training.augmentations import draw
+from dlutils.training.augmentations import ImageDataAugmentation
 
 import numpy as np
 
+from scipy.stats import norm as gaussian_dist
 from scipy.misc import face as example_image
 
 # import matplotlib.pyplot as plt
@@ -33,6 +36,19 @@ def test_flip():
         flipped = flip_axis(img, dim)
         check_dimensions(img_shape, flipped.shape)
 
+
+@pytest.mark.parametrize("keys, throw", [([
+    'zoom',
+], False), (['zoom', 'spam'], True), (['rotation', 'nonsense', 'zoom'], True)])
+def test_throw_augmentator(keys, throw):
+    '''
+    '''
+    keys = {key: 1.0 for key in keys}
+    if throw:
+        with pytest.raises(Exception):
+            ImageDataAugmentation(**keys)
+    else:
+        ImageDataAugmentation(**keys)
 
 @pytest.mark.parametrize("factor", [0.5, 0.75, 1.0, 1.25, 1.5])
 def test_zoom(factor):
@@ -106,5 +122,20 @@ def test_concatenated(factor, angle):
     # plt.show()
 
 
+@pytest.mark.parametrize(
+    "dist,expected",
+    [(1.0, lambda x: 0 <= x <= 1), ([-1, 1], lambda x: x == 1 or x == -1),
+     (gaussian_dist(loc=1, scale=0.3), lambda x: -3 <= x <= 3)])
+def test_draw(dist, expected):
+    '''
+    '''
+    for _ in xrange(5):
+        val = draw(dist)
+        print val
+        assert expected(val)
+
+
 if __name__ == '__main__':
-    test_concatenated(0.85, -45)
+    pass
+    # test_concatenated(0.85, -45)
+    #test_draw([1.0, -2, 'abd'], lambda x : True)

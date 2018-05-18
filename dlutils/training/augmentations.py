@@ -92,8 +92,10 @@ def draw(dist):
     '''
     if hasattr(dist, 'rvs'):
         return dist.rvs(1)[0]
-    if isinstance(dist, float):  # Uniform[0, val]
+    elif isinstance(dist, float):  # Uniform[0, val]
         return np.random.rand(1) * dist
+    elif isinstance(dist, list) or isinstance(dist, np.ndarray):
+        return np.random.choice(dist)
     else:
         raise RuntimeError('Cant draw value from {}'.format(type(dist)))
 
@@ -102,12 +104,16 @@ class ImageDataAugmentation(dict):
     def __init__(self, **kwargs):
         '''
         '''
-        self['zoom'] = None
-        self['rotation'] = None
-        self['shear'] = None
-        self['intensity_scaling'] = None
-        self['intensity_shift'] = None
+        known_keys = ['zoom', 'rotation', 'shear',
+                      'intensity_scaling', 'intensity_shift']
+        for key in known_keys:
+            self[key] = kwargs.get(key, None)
+
         for key, val in kwargs.iteritems():
+            if self.get(key, None) is None:
+                raise NotImplementedError(
+                    'The augmentation feature ({}: {}) is not recognized.'.
+                    format(key, val))
             self[key] = val
 
     def pre_sampling_augmentation(self, inputs, targets):
