@@ -3,7 +3,7 @@ import numpy as np
 
 def CosineAnnealingSchedule(lr_max, lr_min, epoch_max):
 
-    def schedule(epoch, current_lr):
+    def schedule(epoch, current_lr=None):
         '''
         '''
         cosine_factor = (
