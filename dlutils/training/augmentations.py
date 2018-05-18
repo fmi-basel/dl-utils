@@ -105,7 +105,7 @@ class ImageDataAugmentation(dict):
         '''
         '''
         known_keys = ['zoom', 'rotation', 'shear',
-                      'intensity_scaling', 'intensity_shift']
+                      'intensity_scaling', 'intensity_shift', 'intensity_swap']
         for key in known_keys:
             self[key] = kwargs.get(key, None)
 
@@ -175,5 +175,10 @@ class ImageDataAugmentation(dict):
 
             for idx, patch in enumerate(inputs):
                 inputs[idx] = (patch * scaling) + shift
+
+        if self.get('intensity_swap', False):
+            if np.random.random() < 0.5:
+                for idx, patch in enumerate(inputs):
+                    inputs[idx] = -patch
 
         return inputs, targets
