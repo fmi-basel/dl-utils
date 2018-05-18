@@ -1,6 +1,5 @@
 import numpy as np
 
-
 def get_random_patch_corner(img_shape, patch_size):
     '''get the corner coordinate of a random patch
 
@@ -40,3 +39,11 @@ def get_random_patch(channels, patch_size, augmentator=None):
         patches[0] = patches[0][0]
 
     return patches
+
+def exclude_border(img, border_size):
+    '''
+    '''
+    assert all(dim > border_size for dim in img.shape)
+    slices = [slice(border_size, dim - border_size)
+              for dim in img.shape]
+    return img[slices]
