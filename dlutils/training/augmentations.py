@@ -104,7 +104,7 @@ class ImageDataAugmentation(dict):
     def __init__(self, **kwargs):
         '''
         '''
-        known_keys = ['zoom', 'rotation', 'shear',
+        known_keys = ['zoom', 'rotation', 'shear', 'flip',
                       'intensity_scaling', 'intensity_shift', 'intensity_swap']
         for key in known_keys:
             self[key] = kwargs.get(key, None)
