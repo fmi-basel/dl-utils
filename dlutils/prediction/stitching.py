@@ -62,6 +62,11 @@ def predict_complete(model, image, batch_size=None, patch_size=None,
         patch_size = get_patch_size(model)
     n_channels = get_input_channels(model)
 
+    if batch_size is None:
+        raise RuntimeError('Couldnt determine batch_size!')
+    if patch_size is None:
+        raise RuntimeError('Couldnt determine patch_size!')
+
     if n_channels == 1 and image.shape[-1] != 1:
         image = image[..., None]
 
@@ -74,15 +79,29 @@ def predict_complete(model, image, batch_size=None, patch_size=None,
         ]
         image = np.pad(image, pad_width=pad_width, mode='symmetric')
 
+    # TODO handle images that are too small for the given patch_size
+    # a bit more gracefully.
+
+    # if any(x < y for x, y in zip(image.shape, patch_size)):
+    #     pad_width = [(
+    #         (x - y) / 2 + 1,
+    #         (x - y) / 2 + 1,
+    #         ) for x, y in zip(patch_size, image.shape)] + [(0, 0)]
+    #     image = np.pad(image, pad_width=pad_width, mode='symmetric')
+
     # predict on each patch.
     # TODO consider stitching and prediction concurrently.
     # TODO allow for prediction-time-augmentation
     generator = StitchingGenerator(
         image, patch_size=patch_size, batch_size=batch_size, border=border)
 
-    responses = dict(
-        (name, np.zeros(image.shape[:-1] + (out_shape[-1], )))
-        for name, out_shape in zip(model.output_names, model.output_shape))
+    if len(model.output_names) > 1:
+        responses = dict(
+            (name, np.zeros(image.shape[:-1] + (out_shape[-1], )))
+            for name, out_shape in zip(model.output_names, model.output_shape))
+    else:
+        responses = {model.output_names[0] :
+                     np.zeros(image.shape[:-1] + (model.output_shape[-1], ))}
 
     for img_batch, coord_batch in (
         (batch['input'], batch['coord'])
@@ -91,6 +110,10 @@ def predict_complete(model, image, batch_size=None, patch_size=None,
         # predict
         pred_batch = model.predict_on_batch(img_batch)
 
+        # if we have only one output, then the return is not a list.
+        if len(model.output_names) == 1:
+            pred_batch = pred_batch[None, ...]
+
         # re-assemble
         for idx, coord in enumerate(coord_batch):
             slices = [
@@ -98,16 +121,14 @@ def predict_complete(model, image, batch_size=None, patch_size=None,
                 for x, dx in zip(coord, patch_size)
             ]
 
+
             for key, pred in zip(model.output_names, pred_batch):
-                if len(slices) == 2:
-                    # TODO implement smooth stitching.
-                    responses[key][slices[0], slices[1], ...] = pred[
-                        idx][border:-border,
-                             border:-border]
-                else:
-                    raise NotImplementedError(
-                        'Stitching for {}-dimensional images not implemented.'.
-                        format(len(slices)))
+
+                border_slices = [slice(border, -border)
+                                 for _ in xrange(pred[idx].ndim - 1)]
+
+                # TODO implement smooth stitching.
+                responses[key][slices] = pred[idx][border_slices]
 
     if border > 0:
         for key, val in responses.iteritems():
