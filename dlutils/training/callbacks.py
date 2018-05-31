@@ -4,7 +4,7 @@ from dlutils.training.scheduler import CosineAnnealingSchedule
 
 import os
 
-def create_callbacks(outdir, nth_checkpoint, lr, epochs):
+def create_callbacks(outdir, nth_checkpoint, lr, epochs, lr_min=None):
     '''Add basic callbacks for training.
 
     - ModelCheckpoint for latest and every nth epoch.
@@ -13,6 +13,8 @@ def create_callbacks(outdir, nth_checkpoint, lr, epochs):
     - Cosine annealing learning rate schedule
 
     '''
+    if lr_min is None:
+        lr_min = 0.05 * lr
 
     return [
         ModelCheckpoint(os.path.join(outdir, 'model_latest.h5'),
@@ -29,5 +31,5 @@ def create_callbacks(outdir, nth_checkpoint, lr, epochs):
             histogram_freq=0),
         LearningRateScheduler(
             CosineAnnealingSchedule(
-                lr_max=lr, lr_min=0.05 * lr, epoch_max=epochs))
+                lr_max=lr, lr_min=lr_min, epoch_max=epochs))
     ]
