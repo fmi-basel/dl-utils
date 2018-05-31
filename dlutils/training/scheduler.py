@@ -6,10 +6,18 @@ def CosineAnnealingSchedule(lr_max, lr_min, epoch_max, reset_decay=1):
 
     SGDR: Stochastic gradient descent with warm restarts,
     Loshchilov & Hutter, ICLR 2017
+
+    TODO implement increasing epoch_max multiplier.
+    TODO implement checkpointing the model each time a reset is done.
+
     '''
+    if lr_max <= lr_min:
+        raise ValueError(
+            'lr_max has to be larger than lr_min! {} !> {}'.format(
+                lr_max, lr_min))
 
     def schedule(epoch, current_lr=None):
-        '''schedule function to be passed to LearningRateScheduler
+        '''schedule function to be passed to LearningRateScheduler.
 
         '''
         current_lr_max = reset_decay**-int(epoch / epoch_max) * lr_max
