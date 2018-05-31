@@ -3,8 +3,15 @@ from keras.callbacks import ModelCheckpoint, \
 from dlutils.training.scheduler import CosineAnnealingSchedule
 
 import os
+from numpy import ceil
 
-def create_callbacks(outdir, nth_checkpoint, lr, epochs, lr_min=None):
+
+def create_callbacks(outdir,
+                     nth_checkpoint,
+                     lr,
+                     epochs,
+                     lr_min=None,
+                     n_restarts=None):
     '''Add basic callbacks for training.
 
     - ModelCheckpoint for latest and every nth epoch.
@@ -15,12 +22,16 @@ def create_callbacks(outdir, nth_checkpoint, lr, epochs, lr_min=None):
     '''
     if lr_min is None:
         lr_min = 0.05 * lr
+    if n_restarts is None:
+        epochs_to_restart = epochs
+    else:
+        epochs_to_restart = int(ceil(epochs / n_restarts))
 
     return [
-        ModelCheckpoint(os.path.join(outdir, 'model_latest.h5'),
-                        period=1),
-        ModelCheckpoint(os.path.join(outdir, 'model_{epoch:04}.h5'),
-                        period=nth_checkpoint),
+        ModelCheckpoint(os.path.join(outdir, 'model_latest.h5'), period=1),
+        ModelCheckpoint(
+            os.path.join(outdir, 'model_{epoch:04}.h5'),
+            period=nth_checkpoint),
         CSVLogger(
             os.path.join(outdir, 'training.log'), separator=',', append=False),
         TensorBoard(
@@ -31,5 +42,8 @@ def create_callbacks(outdir, nth_checkpoint, lr, epochs, lr_min=None):
             histogram_freq=0),
         LearningRateScheduler(
             CosineAnnealingSchedule(
-                lr_max=lr, lr_min=lr_min, epoch_max=epochs))
+                lr_max=lr,
+                lr_min=lr_min,
+                epoch_max=epochs_to_restart,
+                reset_decay=2.))
     ]
