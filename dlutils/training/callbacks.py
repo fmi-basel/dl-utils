@@ -12,7 +12,7 @@ def create_callbacks(outdir,
                      epochs,
                      lr_min=None,
                      n_restarts=None,
-                     restart_decay=None):
+                     restart_decay=1.0):
     '''Add basic callbacks for training.
 
     - ModelCheckpoint for latest and every nth epoch.
@@ -26,7 +26,7 @@ def create_callbacks(outdir,
     if n_restarts is None:
         epochs_to_restart = epochs
     else:
-        epochs_to_restart = int(ceil(epochs + 1 / n_restarts))
+        epochs_to_restart = int(ceil((epochs + 1) / n_restarts))
 
     return [
         ModelCheckpoint(os.path.join(outdir, 'model_latest.h5'), period=1),
