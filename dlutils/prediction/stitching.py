@@ -67,27 +67,22 @@ def predict_complete(model, image, batch_size=None, patch_size=None,
     if patch_size is None:
         raise RuntimeError('Couldnt determine patch_size!')
 
+    # add "flat" channel if necessary
     if n_channels == 1 and image.shape[-1] != 1:
         image = image[..., None]
 
-    if border > 0:
+    # check if the patch_size fits within image.shape
+    diff_shape = [max(x - y, 0) for x, y in zip(patch_size, image.shape)]
+    print diff_shape
+
+    if border > 0 or any(diff_shape > 0):
         pad_width = [(
-            border,
-            border,
-        ) for idx in xrange(len(patch_size))] + [
+            border + dx / 2,
+            border + dx / 2 + dx % 2,
+        ) for idx, dx in enumerate(diff_shape)] + [
             (0, 0),
         ]
         image = np.pad(image, pad_width=pad_width, mode='symmetric')
-
-    # TODO handle images that are too small for the given patch_size
-    # a bit more gracefully.
-
-    # if any(x < y for x, y in zip(image.shape, patch_size)):
-    #     pad_width = [(
-    #         (x - y) / 2 + 1,
-    #         (x - y) / 2 + 1,
-    #         ) for x, y in zip(patch_size, image.shape)] + [(0, 0)]
-    #     image = np.pad(image, pad_width=pad_width, mode='symmetric')
 
     # predict on each patch.
     # TODO consider stitching and prediction concurrently.
@@ -100,8 +95,10 @@ def predict_complete(model, image, batch_size=None, patch_size=None,
             (name, np.zeros(image.shape[:-1] + (out_shape[-1], )))
             for name, out_shape in zip(model.output_names, model.output_shape))
     else:
-        responses = {model.output_names[0] :
-                     np.zeros(image.shape[:-1] + (model.output_shape[-1], ))}
+        responses = {
+            model.output_names[0]:
+            np.zeros(image.shape[:-1] + (model.output_shape[-1], ))
+        }
 
     for img_batch, coord_batch in (
         (batch['input'], batch['coord'])
@@ -121,17 +118,23 @@ def predict_complete(model, image, batch_size=None, patch_size=None,
                 for x, dx in zip(coord, patch_size)
             ]
 
-
             for key, pred in zip(model.output_names, pred_batch):
 
-                border_slices = [slice(border, -border)
-                                 for _ in xrange(pred[idx].ndim - 1)]
+                border_slices = [
+                    slice(border, -border) for _ in xrange(pred[idx].ndim - 1)
+                ]
 
                 # TODO implement smooth stitching.
                 responses[key][slices] = pred[idx][border_slices]
 
-    if border > 0:
+    if border > 0 or any(diff_shape > 0):
+
+        slices = [
+            slice(border + dx / 2, -(border + dx / 2 + dx % 2))
+            for dx in diff_shape
+        ]
+
         for key, val in responses.iteritems():
-            responses[key] = val[border:-border, border:-border, ...]
+            responses[key] = val[slices]
 
     return responses
