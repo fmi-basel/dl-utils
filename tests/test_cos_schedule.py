@@ -10,10 +10,6 @@ def test_cos_schedule():
 
     lrs = [scheduler(epoch, 0.1) for epoch in xrange(3 * epoch_max)]
 
-    import matplotlib.pyplot as plt
-    plt.plot(lrs)
-    plt.show()
-
     assert lrs[0] == 0.1
     assert abs(lrs[-1] - 0.01) <= 1e-3
 
