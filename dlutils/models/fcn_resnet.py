@@ -12,7 +12,8 @@ from dlutils.models.utils import get_crop_shape
 import numpy as np
 
 
-def ResnetBase(input_shape,
+def ResnetBase(input_shape=None,
+               input_tensor=None,
                batch_size=None,
                weight_file=None,
                dropout=None,
@@ -23,16 +24,13 @@ def ResnetBase(input_shape,
     if input_shape is None:
         input_shape = (224, 224, 3)
 
-    if input_shape[0] <= 224 or input_shape[1] <= 224:
-        raise ValueError(
-            'input_shape of ResNet needs to be at least 224x244. Given input_shape={}'.format(
-                input_shape))
-
     # reasonable layers to truncate: 10, 22, 40, 49
     truncate_layer = '40'
 
-    input_tensor = Input(
-        batch_shape=(batch_size, ) + input_shape, name='input')
+    if input_tensor is None:
+        input_tensor = Input(
+            batch_shape=(batch_size, ) + input_shape, name='input')
+
     input_tensor = ZeroPadding2D((2, 2))(input_tensor)
     last_layer_name = 'activation_{}'.format(truncate_layer)
 
@@ -56,7 +54,7 @@ def ResnetBase(input_shape,
     x = model.output
     for level in xrange(n_levels):
         no_features /= 2
-        
+
         x = UpSampling2D(2)(x)
 
         y = model.get_layer(merge_layers[level]).output
@@ -75,8 +73,7 @@ def ResnetBase(input_shape,
 
         if np.any(crop_shape > 0):
             y = Cropping2D(
-                cropping=crop_shape,
-                name='UP{:02}_CRPY'.format(level))(y)
+                cropping=crop_shape, name='UP{:02}_CRPY'.format(level))(y)
         x = concatenate([x, y], axis=3, name='UP{:02}_CONC'.format(level))
 
         features = [no_features / 4, no_features / 4, no_features]
