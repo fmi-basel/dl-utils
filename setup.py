@@ -20,8 +20,9 @@ setup(
         'numpy',
         'matplotlib',
         'scipy',
-        'keras==2.1.6',
-        'opencv-python>=3.4'
+        'keras==2.0.8',
+        'opencv-python>=3.4',
+        'skimage>=0.13'
     ],
     # I believe zipping makes the import rather slow.
     zip_safe=False)
