@@ -7,23 +7,40 @@ from keras.layers import Dropout
 from keras.layers import concatenate
 from keras.layers import Cropping2D
 from keras.layers import BatchNormalization
+from keras.engine.topology import get_source_inputs
+
+import logging
 
 
-def UnetBase(input_shape,
+def UnetBase(input_shape=None,
+             input_tensor=None,
              batch_size=None,
              weight_file=None,
              dropout=None,
-             with_bn=False):
+             with_bn=False,
+             cardinality=1,
+             n_levels=5):
     '''construct a basic U-Net without any output layer.
 
     TODO describe parameters.
 
     '''
-    conv_params = dict(kernel_size=(3, 3), padding='valid', activation='relu')
+    logger = logging.getLogger(__name__)
+
+    conv_params = dict(kernel_size=(3, 3), padding='same', activation='relu')
+
+    if dropout == 0.:  # disable dropout if zero.
+        dropout = None
 
     if dropout is not None:
         assert 0. < dropout < 1.0, \
             'Dropout has to be within 0. and 1.'
+
+    assert 1 / 64. < cardinality, \
+        'cardinality has to be larger than 1 / 64'
+
+    assert 1 <= n_levels, \
+        'n_levels has to be larger than 0'
 
     def contracting_block(x, n_features, level):
         '''constrcut the default block of a UNet.
@@ -69,33 +86,38 @@ def UnetBase(input_shape,
             strides=2,
             name=base_name + '_DC',
             padding=conv_params['padding']
-            # **conv_params
         )(x)
         if with_bn:
             x = BatchNormalization(name=base_name + '_BN0')(x)
 
         # Ensure both channels have the same shape
-        y = Cropping2D(
+        x = Cropping2D(
             cropping=get_crop_shape(
-                x_shape, [y.get_shape()[idx].value for idx in xrange(1, 3)]),
-            name=base_name + '_CRP')(y)
+                [y.get_shape()[idx].value for idx in xrange(1, 3)], x_shape),
+            name=base_name + '_CRP')(x)
 
         # Concatenate with corresponding level
         x = concatenate([x, y], axis=3, name=base_name + '_CONC')
-        x = Convolution2D(n_features, name=base_name + '_C0', **conv_params)(x)
-        if with_bn:
-            x = BatchNormalization(name=base_name + '_BN1')(x)
-        x = Convolution2D(n_features, name=base_name + '_C1', **conv_params)(x)
-        if with_bn:
-            x = BatchNormalization(name=base_name + '_BN2')(x)
+        for ii in xrange(1, 3):
+            x = Convolution2D(
+                n_features, name=base_name + '_C{}'.format(ii),
+                **conv_params)(x)
+            if with_bn:
+                x = BatchNormalization(name=base_name + '_BN{}'.format(ii))(x)
 
         return x
 
-    n_levels = 5
-    input = Input(batch_shape=(batch_size, ) + input_shape, name='input')
+    # Assemble input
+    if input_tensor is None:
+        img_input = Input(
+            batch_shape=(batch_size, ) + input_shape, name='input')
+    else:
+        img_input = input_tensor
 
-    n_features_basic = 64
-    x = input
+    # width of first feature map.
+    n_features_basic = int(64 * cardinality)
+
+    x = img_input
     cb_out = [
         None,
     ] * n_levels
@@ -103,10 +125,14 @@ def UnetBase(input_shape,
     # build contracting path
     for level, n_features in ((level, n_features_basic * (2**level))
                               for level in xrange(n_levels)):
+
         cb_out[level] = contracting_block(
             x, n_features=n_features, level=level)
+        x = cb_out[level]
+
         if level < n_levels - 1:  # dont add pooling for the very lowest layer!
-            x = MaxPooling2D(name='CB_L{:02}_MP'.format(level))(cb_out[level])
+            x = MaxPooling2D(
+                padding='same', name='CB_L{:02}_MP'.format(level))(x)
 
     # input layer to expanding path
     x = cb_out[-1]
@@ -117,11 +143,22 @@ def UnetBase(input_shape,
         x = expanding_block(
             x, cb_out[level], n_features=n_features, level=level)
 
-    model = Model(input, x)
+    # handle the case where input_tensor are other layers.
+    if input_tensor is not None:
+        inputs = get_source_inputs(input_tensor)
+    else:
+        inputs = img_input
+
+    name = 'UNet-{}-{}'.format(cardinality, n_levels)
+    if with_bn:
+        name += '-BN'
+    if dropout > 0:
+        name += '-D{}'.format(dropout)
+    model = Model(inputs, x, name=name)
 
     if weight_file is not None:
         # TODO replace with logger
-        print 'Loading weights from :{}', weight_file
+        logger.info('Loading weights from :{}'.format(weight_file))
         model.load_weights(weight_file)
 
     return model
