@@ -12,12 +12,18 @@ from keras.engine.topology import get_source_inputs
 import logging
 
 
-def get_model_name(cardinality, n_levels, dropout, with_bn):
+def get_model_name(cardinality, n_levels, dropout, with_bn, *args, **kwargs):
     name = 'UNet-{}-{}'.format(cardinality, n_levels)
     if with_bn:
         name += '-BN'
     if dropout is not None:
         name += '-D{}'.format(dropout)
+
+    logger = logging.getLogger(__name__)
+    if args is not None:
+        logger.warning('Unused parameters: {}'.format(args))
+    if kwargs is not None:
+        logger.warning('Unused parameters: {}'.format(kwargs))
     return name
 
 
