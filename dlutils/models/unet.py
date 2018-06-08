@@ -12,6 +12,15 @@ from keras.engine.topology import get_source_inputs
 import logging
 
 
+def get_model_name(cardinality, n_levels, dropout, with_bn):
+    name = 'UNet-{}-{}'.format(cardinality, n_levels)
+    if with_bn:
+        name += '-BN'
+    if dropout is not None:
+        name += '-D{}'.format(dropout)
+    return name
+
+
 def UnetBase(input_shape=None,
              input_tensor=None,
              batch_size=None,
@@ -85,8 +94,7 @@ def UnetBase(input_shape=None,
             kernel_size=2,
             strides=2,
             name=base_name + '_DC',
-            padding=conv_params['padding']
-        )(x)
+            padding=conv_params['padding'])(x)
         if with_bn:
             x = BatchNormalization(name=base_name + '_BN0')(x)
 
@@ -149,12 +157,10 @@ def UnetBase(input_shape=None,
     else:
         inputs = img_input
 
-    name = 'UNet-{}-{}'.format(cardinality, n_levels)
-    if with_bn:
-        name += '-BN'
-    if dropout > 0:
-        name += '-D{}'.format(dropout)
-    model = Model(inputs, x, name=name)
+    model = Model(
+        inputs,
+        x,
+        name=get_model_name(cardinality, n_levels, dropout, with_bn))
 
     if weight_file is not None:
         # TODO replace with logger

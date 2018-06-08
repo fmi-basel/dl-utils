@@ -25,7 +25,7 @@ def add_fcn_output_layers(model,
                 kernel_size=kernel_size,
                 name=name,
                 activation=activation)(last_layer))
-    model = Model(model.inputs, outputs)
+    model = Model(model.inputs, outputs, name=model.name)
     return model
 
 
