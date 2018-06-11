@@ -20,10 +20,10 @@ def get_model_name(cardinality, n_levels, dropout, with_bn, *args, **kwargs):
         name += '-D{}'.format(dropout)
 
     logger = logging.getLogger(__name__)
-    if args is not None:
-        logger.warning('Unused parameters: {}'.format(args))
-    if kwargs is not None:
-        logger.warning('Unused parameters: {}'.format(kwargs))
+    if len(args) >= 1:
+        logger.warning('Unused parameters in get_model_name: {}'.format(args))
+    if len(kwargs) >= 1:
+        logger.warning('Unused parameters in get_model_name: {}'.format(kwargs))
     return name
 
 
