@@ -17,6 +17,21 @@ from keras import backend as K
 from dlutils.models.utils import get_crop_shape
 import numpy as np
 
+import logging
+
+
+def get_model_name(cardinality, n_levels, dropout_rate=None, *args, **kwargs):
+    name = 'resnet-{}-{}'.format(cardinality, n_levels)
+    if dropout_rate is not None:
+        name += '-D{}'.format(dropout_rate)
+
+    logger = logging.getLogger(__name__)
+    if args is not None:
+        logger.warning('Unused parameters: {}'.format(args))
+    if kwargs is not None:
+        logger.warning('Unused parameters: {}'.format(kwargs))
+    return name
+
 
 def identity_block(input_tensor,
                    kernel_size,
@@ -213,7 +228,7 @@ def _construct_resnet(img_input,
     return [C1, C2, C3, C4, C5]
 
 
-def _construct_decoding_path(feature_levels, n_blocks):
+def _construct_decoding_path(feature_levels, n_blocks, dropout_rate=0):
     '''construct the base decoding block.
 
     '''
@@ -252,7 +267,8 @@ def _construct_decoding_path(feature_levels, n_blocks):
 
         for block in xrange(1, n_blocks):
             x = identity_block(
-                x, 3, features, stage=5 + level, block=chr(98 + block))
+                x, 3, features, stage=5 + level, block=chr(98 + block),
+                dropout_rate=dropout_rate)
 
     return x
 
@@ -284,10 +300,11 @@ def ResnetBase(input_shape=None,
 
     #
     feature_levels = _construct_resnet(
-        img_input, bn_axis, cardinality=cardinality, n_levels=n_levels)
+        img_input, bn_axis, cardinality=cardinality, n_levels=n_levels,
+        dropout_rate=dropout)
     outputs = _construct_decoding_path([
         img_input,
-    ] + feature_levels, n_blocks)
+    ] + feature_levels, n_blocks, dropout_rate=dropout)
 
     # handle inputs
     if input_tensor is not None:
