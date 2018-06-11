@@ -73,7 +73,6 @@ def predict_complete(model, image, batch_size=None, patch_size=None,
 
     # check if the patch_size fits within image.shape
     diff_shape = [max(x - y, 0) for x, y in zip(patch_size, image.shape)]
-    print diff_shape
 
     if border > 0 or any(diff_shape > 0):
         pad_width = [(
