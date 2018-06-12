@@ -2,6 +2,20 @@ from keras.layers import Convolution2D
 from keras.engine import Model
 
 
+def construct_base_model(name, **model_params):
+    '''Base model factory.
+
+    '''
+    if name == 'resnet':
+        from dlutils.models.fcn_resnet import ResnetBase
+        return ResnetBase(**model_params)
+    if name == 'unet':
+        from dlutils.models.unet import UnetBase
+        return UnetBase(**model_params)
+    else:
+        raise NotImplementedError('Model {} not known!'.format(name))
+
+
 def add_fcn_output_layers(model,
                           names,
                           n_classes,

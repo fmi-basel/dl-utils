@@ -17,14 +17,15 @@ def cleanup():
 
 
 @pytest.mark.parametrize(
-    "input_shape,n_levels,cardinality",
+    "input_shape,n_levels,cardinality,n_blocks",
     list(
         product(
-            [(259, 297, 1), (300, 256, 1), (302, 315, 3)],  # input shapes
-            [2, 4, 5],  # n_levels
-            [0.3, 1, 1.2],  # cardinality
+            [(259, 297, 1), (302, 315, 3)],  # input shapes
+            [2, 5],  # n_levels
+            [0.3, 1.2],  # cardinality
+            [2, 3] # n_blocks
         )))
-def test_resnet_setup(input_shape, n_levels, cardinality):
+def test_resnet_setup(input_shape, n_levels, cardinality, n_blocks):
     '''
     '''
     batch_size = 3
@@ -34,7 +35,8 @@ def test_resnet_setup(input_shape, n_levels, cardinality):
         with_bn=True,
         dropout=0.5,
         n_levels=n_levels,
-        cardinality=cardinality)
+        cardinality=cardinality,
+        n_blocks=n_blocks)
 
     pred_names = ['pred_cell', 'pred_border']
     model = add_fcn_output_layers(model, pred_names, [1, 1])
@@ -47,6 +49,7 @@ def test_resnet_setup(input_shape, n_levels, cardinality):
         })
 
     model.summary()
+    print model.name
 
     # make sure the feed forward path works.
     img = np.random.randn(batch_size, *input_shape)
@@ -94,4 +97,4 @@ def test_preprocessed():
 
 
 if __name__ == '__main__':
-    test_resnet_setup((300, 300, 1), 3, 0.2)
+    test_resnet_setup((300, 300, 1), 3, 0.2, 3)

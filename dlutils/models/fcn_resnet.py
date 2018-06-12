@@ -20,8 +20,15 @@ import numpy as np
 import logging
 
 
-def get_model_name(cardinality, n_levels, dropout_rate=None, *args, **kwargs):
-    name = 'resnet-{}-{}'.format(cardinality, n_levels)
+def get_model_name(cardinality,
+                   n_levels,
+                   n_blocks,
+                   dropout_rate=None,
+                   *args,
+                   **kwargs):
+    '''generate model name from its parameters.
+    '''
+    name = 'resnet-{}-{}-dec{}'.format(cardinality, n_levels, n_blocks)
     if dropout_rate is not None:
         name += '-D{}'.format(dropout_rate)
 
@@ -267,7 +274,11 @@ def _construct_decoding_path(feature_levels, n_blocks, dropout_rate=0):
 
         for block in xrange(1, n_blocks):
             x = identity_block(
-                x, 3, features, stage=5 + level, block=chr(98 + block),
+                x,
+                3,
+                features,
+                stage=5 + level,
+                block=chr(98 + block),
                 dropout_rate=dropout_rate)
 
     return x
@@ -298,21 +309,28 @@ def ResnetBase(input_shape=None,
     else:
         bn_axis = 1
 
-    #
+    # build encoding and decoding path.
     feature_levels = _construct_resnet(
-        img_input, bn_axis, cardinality=cardinality, n_levels=n_levels,
-        dropout_rate=dropout)
-    outputs = _construct_decoding_path([
         img_input,
-    ] + feature_levels, n_blocks, dropout_rate=dropout)
+        bn_axis,
+        cardinality=cardinality,
+        n_levels=n_levels,
+        dropout_rate=dropout)
+    outputs = _construct_decoding_path(
+        [
+            img_input,
+        ] + feature_levels, n_blocks, dropout_rate=dropout)
 
-    # handle inputs
+    # handle inputs.
     if input_tensor is not None:
         inputs = get_source_inputs(input_tensor)
     else:
         inputs = img_input
 
-    final_model = Model(inputs=inputs, outputs=outputs)
+    final_model = Model(
+        inputs=inputs,
+        outputs=outputs,
+        name=get_model_name(cardinality, n_levels, n_blocks, dropout))
 
     if weight_file is not None:
         final_model.load_weights(weight_file)
