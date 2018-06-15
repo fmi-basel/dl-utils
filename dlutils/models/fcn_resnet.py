@@ -26,7 +26,7 @@ import numpy as np
 import logging
 
 
-def get_model_name(cardinality=1,
+def get_model_name(width=1,
                    n_levels=4,
                    n_blocks=2,
                    dropout_rate=None,
@@ -34,7 +34,7 @@ def get_model_name(cardinality=1,
                    **kwargs):
     '''generate model name from its parameters.
     '''
-    name = 'resnet-{}-{}-dec{}'.format(cardinality, n_levels, n_blocks)
+    name = 'resnet-{}-{}-dec{}'.format(width, n_levels, n_blocks)
     if dropout_rate is not None:
         name += '-D{}'.format(dropout_rate)
 
@@ -159,15 +159,15 @@ def conv_block(input_tensor,
 def _construct_resnet(img_input,
                       bn_axis,
                       n_levels,
-                      cardinality=1,
+                      width=1,
                       dropout_rate=0):
     '''
     '''
-    assert 0 < cardinality
+    assert 0 < width
     assert 2 <= n_levels <= 5, \
         'n_levels must be within {2, .., 5}'
 
-    n_features = int(cardinality * 64)
+    n_features = int(width * 64)
 
     x = ZeroPadding2D(padding=(3, 3), name='conv1_pad')(img_input)
     x = Conv2D(
@@ -299,7 +299,7 @@ def ResnetBase(input_shape=None,
                weight_file=None,
                dropout=None,
                with_bn=False,
-               cardinality=1,
+               width=1,
                n_levels=4,
                n_blocks=2):
     '''base constructor for resnet-based architectures.
@@ -322,7 +322,7 @@ def ResnetBase(input_shape=None,
     feature_levels = _construct_resnet(
         img_input,
         bn_axis,
-        cardinality=cardinality,
+        width=width,
         n_levels=n_levels,
         dropout_rate=dropout)
     outputs = _construct_decoding_path(
@@ -339,7 +339,7 @@ def ResnetBase(input_shape=None,
     final_model = Model(
         inputs=inputs,
         outputs=outputs,
-        name=get_model_name(cardinality, n_levels, n_blocks, dropout))
+        name=get_model_name(width, n_levels, n_blocks, dropout))
 
     if weight_file is not None:
         final_model.load_weights(weight_file)

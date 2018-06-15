@@ -17,15 +17,15 @@ def cleanup():
 
 
 @pytest.mark.parametrize(
-    "input_shape,n_levels,cardinality,n_blocks",
+    "input_shape,n_levels,width,n_blocks",
     list(
         product(
             [(259, 297, 1), (302, 315, 3)],  # input shapes
             [2, 5],  # n_levels
-            [0.3, 1.2],  # cardinality
+            [0.3, 1.2],  # width
             [2, 3] # n_blocks
         )))
-def test_resnet_setup(input_shape, n_levels, cardinality, n_blocks):
+def test_resnet_setup(input_shape, n_levels, width, n_blocks):
     '''
     '''
     batch_size = 3
@@ -35,7 +35,7 @@ def test_resnet_setup(input_shape, n_levels, cardinality, n_blocks):
         with_bn=True,
         dropout=0.5,
         n_levels=n_levels,
-        cardinality=cardinality,
+        width=width,
         n_blocks=n_blocks)
 
     pred_names = ['pred_cell', 'pred_border']
