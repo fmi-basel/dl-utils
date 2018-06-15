@@ -1,5 +1,3 @@
-from glob import glob
-import os
 from setuptools import setup, find_packages
 
 contrib = [
@@ -17,13 +15,8 @@ setup(
         'tests',
     ]),
     install_requires=[
-        'numpy',
-        'matplotlib',
-        'scipy',
-        'keras==2.0.8',
-        'opencv-python>=3.4',
-        'scikit-image>=0.13',
-        'scikit-learn'
+        'numpy', 'matplotlib', 'scipy', 'keras==2.0.8', 'opencv-python>=3.4',
+        'scikit-image>=0.13', 'scikit-learn', 'future'
     ],
     # I believe zipping makes the import rather slow.
     zip_safe=False)
