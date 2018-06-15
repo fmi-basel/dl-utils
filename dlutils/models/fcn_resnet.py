@@ -20,9 +20,9 @@ import numpy as np
 import logging
 
 
-def get_model_name(cardinality,
-                   n_levels,
-                   n_blocks,
+def get_model_name(cardinality=1,
+                   n_levels=4,
+                   n_blocks=2,
                    dropout_rate=None,
                    *args,
                    **kwargs):
