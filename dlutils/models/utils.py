@@ -7,6 +7,17 @@ from keras.layers import Convolution2D
 from keras.engine import Model
 
 
+def get_base_model_name(name, **kwargs):
+    if name == 'resnet':
+        from dlutils.models.fcn_resnet import get_model_name as resnet_name
+        return resnet_name(**kwargs)
+    elif name == 'unet':
+        from dlutils.models.unet import get_model_name as unet_name
+        return unet_name(**kwargs)
+    else:
+        raise NotImplementedError('Model {} not known!'.format(name))
+
+
 def construct_base_model(name, **model_params):
     '''Base model factory.
 
@@ -14,7 +25,7 @@ def construct_base_model(name, **model_params):
     if name == 'resnet':
         from dlutils.models.fcn_resnet import ResnetBase
         return ResnetBase(**model_params)
-    if name == 'unet':
+    elif name == 'unet':
         from dlutils.models.unet import UnetBase
         return UnetBase(**model_params)
     else:
