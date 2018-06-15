@@ -60,7 +60,7 @@ def test_2d_sampler(n_handles, samples_per_handle, batch_size):
     patch_size = (64, 64)
 
     handles = [
-        Handle(shape=img_shape + (n_channels, )) for _ in xrange(n_handles)
+        Handle(shape=img_shape + (n_channels, )) for _ in range(n_handles)
     ]
 
     generator = TrainingGenerator(
@@ -74,20 +74,20 @@ def test_2d_sampler(n_handles, samples_per_handle, batch_size):
     assert len(generator) > 0
 
     # Check batch dimensions
-    for batch_idx in xrange(expected_length):
+    for batch_idx in range(expected_length):
         in_batch, out_batch = generator[0]
 
-        print in_batch['input'].shape,
+        print(in_batch['input'].shape, end=' ')
         expected_shape = (batch_size, patch_size[0], patch_size[1], n_channels)
-        assert in_batch.keys()[0] == 'input'
+        assert list(in_batch.keys())[0] == 'input'
 
-        for key, val in in_batch.iteritems():
+        for key, val in in_batch.items():
             np.testing.assert_equal(
                 val.shape, expected_shape,
                 'Shapes of {} are mismatching: {} != {}'.format(
                     key, in_batch[key].shape, expected_shape))
 
-        for key, val in out_batch.iteritems():
+        for key, val in out_batch.items():
             np.testing.assert_equal(
                 val.shape, expected_shape,
                 'Shapes of {} are mismatching: {} != {}'.format(
@@ -104,7 +104,7 @@ def test_generator_with_augmentation(n_handles=5,
     patch_size = (64, 64)
 
     handles = [
-        Handle(shape=img_shape + (n_channels, )) for _ in xrange(n_handles)
+        Handle(shape=img_shape + (n_channels, )) for _ in range(n_handles)
     ]
     
     generator = TrainingGenerator(
@@ -124,20 +124,20 @@ def test_generator_with_augmentation(n_handles=5,
     assert len(generator) > 0
 
     # Check batch dimensions
-    for batch_idx in xrange(expected_length):
+    for batch_idx in range(expected_length):
         in_batch, out_batch = generator[0]
 
-        print in_batch['input'].shape,
+        print(in_batch['input'].shape, end=' ')
         expected_shape = (batch_size, patch_size[0], patch_size[1], n_channels)
-        assert in_batch.keys()[0] == 'input'
+        assert list(in_batch.keys())[0] == 'input'
 
-        for key, val in in_batch.iteritems():
+        for key, val in in_batch.items():
             np.testing.assert_equal(
                 val.shape, expected_shape,
                 'Shapes of {} are mismatching: {} != {}'.format(
                     key, in_batch[key].shape, expected_shape))
 
-        for key, val in out_batch.iteritems():
+        for key, val in out_batch.items():
             np.testing.assert_equal(
                 val.shape, expected_shape,
                 'Shapes of {} are mismatching: {} != {}'.format(

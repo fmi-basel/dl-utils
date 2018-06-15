@@ -1,3 +1,8 @@
+from __future__ import absolute_import
+from __future__ import division
+from __future__ import print_function
+from __future__ import unicode_literals
+
 from dlutils.prediction import predict_complete
 
 from dlutils.models.fcn_resnet import ResnetBase
@@ -5,7 +10,6 @@ from dlutils.models.utils import add_fcn_output_layers
 
 from itertools import product
 import numpy as np
-import cv2
 
 import pytest
 
@@ -36,11 +40,11 @@ def test_predict_complete(input_shape, image_shape):
     prediction = predict_complete(
         model, image, batch_size=batch_size, border=30)
 
-    for key, val in prediction.iteritems():
+    for key, val in prediction.items():
         assert val.shape == image.shape, \
             'prediction[{}].shape does not match image.shape! {} != {}'.format(
                 key, val.shape, image.shape)
 
 
 if __name__ == '__main__':
-    test_predict_complete((250, 250, 1))
+    test_predict_complete((250, 250, 1), (300, 351, 1))

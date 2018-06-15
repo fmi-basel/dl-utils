@@ -1,3 +1,8 @@
+from __future__ import absolute_import
+from __future__ import division
+from __future__ import print_function
+from __future__ import unicode_literals
+
 from scipy.ndimage.morphology import grey_closing
 from scipy.ndimage.morphology import grey_dilation
 from scipy.ndimage.morphology import distance_transform_edt

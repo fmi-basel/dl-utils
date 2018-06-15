@@ -1,3 +1,8 @@
+from __future__ import absolute_import
+from __future__ import division
+from __future__ import print_function
+from builtins import range
+
 from keras.utils import Sequence
 
 import numpy as np
@@ -20,15 +25,15 @@ class LazyTrainingHandle(dict):
         '''
         '''
         return dict(
-            zip(self.get_input_keys() + self.get_output_keys(),
-                get_random_patch(
-                    [
-                        self[key] for key in
-                        self.get_input_keys() + self.get_output_keys()
-                    ],
-                    patch_size=patch_size,
-                    augmentator=augmentator
-                    )))
+            list(
+                zip(self.get_input_keys() + self.get_output_keys(),
+                    get_random_patch(
+                        [
+                            self[key] for key in
+                            self.get_input_keys() + self.get_output_keys()
+                        ],
+                        patch_size=patch_size,
+                        augmentator=augmentator))))
 
     def get_input_keys(self):
         '''returns a list of input keys
@@ -78,9 +83,10 @@ class TrainingGenerator(Sequence):
         self.augmentator = augmentator
 
         if len(self) <= 0:
-            print len(self.handles) * self.samples_per_handle, self.batch_size
+            print(len(self.handles) * self.samples_per_handle, self.batch_size)
             raise ValueError(
-                'Generator can have zero length! Increase samples_per_handle or decrease batch_size. {} < {}'.
+                'Generator cant have zero length!'
+                'Increase samples_per_handle or decrease batch_size. {} < {}'.
                 format(
                     len(self.handles) * self.samples_per_handle,
                     self.batch_size))
@@ -103,24 +109,24 @@ class TrainingGenerator(Sequence):
         # indexing wraps around to support batches of larger size than
         # len(handles) when samples_per_handle > 1
         for handle in (self.handles[idx % len(self.handles)]
-                       for idx in xrange(self.batch_size)):
+                       for idx in range(self.batch_size)):
             handle.load()  # make sure data is available.
             patches = handle.get_random_patch(self.patch_size,
                                               self.augmentator)
 
-            for key in inputs.iterkeys():
+            for key in inputs.keys():
                 inputs[key].append(patches[key])
-            for key in outputs.iterkeys():
+            for key in outputs.keys():
                 outputs[key].append(patches[key])
 
             if not self.buffer:
                 handle.clear()
 
         # Turn each list into a numpy array
-        for key in inputs.iterkeys():
+        for key in inputs.keys():
             inputs[key] = np.asarray(inputs[key])
 
-        for key in outputs.iterkeys():
+        for key in outputs.keys():
             outputs[key] = np.asarray(outputs[key])
 
         return inputs, outputs

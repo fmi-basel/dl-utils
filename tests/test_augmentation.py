@@ -32,7 +32,7 @@ def test_flip():
     img = example_image()
     img_shape = img.shape
 
-    for dim in xrange(2):
+    for dim in range(2):
         flipped = flip_axis(img, dim)
         check_dimensions(img_shape, flipped.shape)
 
@@ -99,8 +99,8 @@ def test_shear(angle):
 
 
 @pytest.mark.parametrize("factor,angle",
-                         zip([0.5, 1.5, 0.5, 1.5, 0.5],
-                             np.linspace(-30, 30, 5).tolist()))
+                         list(zip([0.5, 1.5, 0.5, 1.5, 0.5],
+                             np.linspace(-30, 30, 5).tolist())))
 def test_concatenated(factor, angle):
     '''
     '''
@@ -129,9 +129,9 @@ def test_concatenated(factor, angle):
 def test_draw(dist, expected):
     '''
     '''
-    for _ in xrange(5):
+    for _ in range(5):
         val = draw(dist)
-        print val
+        print(val)
         assert expected(val)
 
 

@@ -49,7 +49,7 @@ def test_resnet_setup(input_shape, n_levels, cardinality, n_blocks):
         })
 
     model.summary()
-    print model.name
+    print(model.name)
 
     # make sure the feed forward path works.
     img = np.random.randn(batch_size, *input_shape)
@@ -93,7 +93,7 @@ def test_preprocessed():
 
     for name, pred in zip(pred_names, pred):
         # TODO include check for proper dimensionality.
-        print name, pred.shape
+        print(name, pred.shape)
 
 
 if __name__ == '__main__':

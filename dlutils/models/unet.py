@@ -1,3 +1,10 @@
+from __future__ import absolute_import
+from __future__ import division
+from __future__ import print_function
+from __future__ import unicode_literals
+from builtins import range
+
+
 from keras.engine import Input
 from keras.engine import Model
 from keras.layers import Convolution2D
@@ -107,12 +114,12 @@ def UnetBase(input_shape=None,
         # Ensure both channels have the same shape
         x = Cropping2D(
             cropping=get_crop_shape(
-                [y.get_shape()[idx].value for idx in xrange(1, 3)], x_shape),
+                [y.get_shape()[idx].value for idx in range(1, 3)], x_shape),
             name=base_name + '_CRP')(x)
 
         # Concatenate with corresponding level
         x = concatenate([x, y], axis=3, name=base_name + '_CONC')
-        for ii in xrange(1, 3):
+        for ii in range(1, 3):
             x = Convolution2D(
                 n_features, name=base_name + '_C{}'.format(ii),
                 **conv_params)(x)
@@ -138,7 +145,7 @@ def UnetBase(input_shape=None,
 
     # build contracting path
     for level, n_features in ((level, n_features_basic * (2**level))
-                              for level in xrange(n_levels)):
+                              for level in range(n_levels)):
 
         cb_out[level] = contracting_block(
             x, n_features=n_features, level=level)
@@ -153,7 +160,7 @@ def UnetBase(input_shape=None,
 
     # build expanding path
     for level, n_features in ((level, n_features_basic * (2**level))
-                              for level in xrange(n_levels - 2, -1, -1)):
+                              for level in range(n_levels - 2, -1, -1)):
         x = expanding_block(
             x, cb_out[level], n_features=n_features, level=level)
 

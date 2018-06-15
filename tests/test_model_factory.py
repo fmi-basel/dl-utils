@@ -45,8 +45,8 @@ def test_constructor(name, input_shape, n_levels, dropout):
 
     model.summary()
 
-    print name
-    print model.name
+    print(name)
+    print(model.name)
 
     assert name in model.name.lower()
 

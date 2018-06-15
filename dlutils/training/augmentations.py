@@ -1,3 +1,8 @@
+from __future__ import absolute_import
+from __future__ import division
+from __future__ import print_function
+from builtins import range
+
 import numpy as np
 from scipy.ndimage.interpolation import affine_transform
 
@@ -16,7 +21,7 @@ def get_zoom_transform(factor, ndim):
     '''
     '''
     transform = np.diag(np.ones(ndim + 1))
-    for idx in xrange(ndim - 1):  # only scale spatial dimensions
+    for idx in range(ndim - 1):  # only scale spatial dimensions
         transform[idx, idx] = factor
     return transform
 
@@ -66,7 +71,7 @@ def transform_matrix_offset(matrix, shape):
     offset_matrix = np.diag(np.ones(len(matrix)))
     reset_matrix = np.diag(np.ones(len(matrix)))
 
-    for idx, dim in zip(xrange(len(matrix) - 1), shape):
+    for idx, dim in zip(range(len(matrix) - 1), shape):
         dx = float(dim) / 2 + 0.5
         offset_matrix[idx, -1] = dx
         reset_matrix[idx, -1] = -dx
@@ -104,12 +109,14 @@ class ImageDataAugmentation(dict):
     def __init__(self, **kwargs):
         '''
         '''
-        known_keys = ['zoom', 'rotation', 'shear', 'flip',
-                      'intensity_scaling', 'intensity_shift', 'intensity_swap']
+        known_keys = [
+            'zoom', 'rotation', 'shear', 'flip', 'intensity_scaling',
+            'intensity_shift', 'intensity_swap'
+        ]
         for key in known_keys:
             self[key] = kwargs.get(key, None)
 
-        for key, val in kwargs.iteritems():
+        for key, val in kwargs.items():
             if self.get(key, None) is None:
                 raise NotImplementedError(
                     'The augmentation feature ({}: {}) is not recognized.'.

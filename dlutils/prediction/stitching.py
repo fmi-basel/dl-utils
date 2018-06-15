@@ -1,3 +1,8 @@
+from __future__ import absolute_import
+from __future__ import division
+from __future__ import print_function
+from builtins import range
+
 from dlutils.models.utils import get_batch_size
 from dlutils.models.utils import get_patch_size
 from dlutils.models.utils import get_input_channels
@@ -32,10 +37,10 @@ class StitchingGenerator(Sequence):
         if idx > len(self):
             raise IndexError('idx {} out of range {}'.format(idx, len(self)))
         batch_end = min((idx + 1) * self.batch_size, len(self.corners))
-        coord_batch, img_batch = zip(*[(
-            (i, j),
-            self.image[i:i + self.patch_size[0], j:j + self.patch_size[1], ...]
-        ) for i, j in self.corners[idx * self.batch_size:batch_end]])
+        coord_batch, img_batch = list(
+            zip(*[((i, j), self.image[i:i + self.patch_size[0], j:
+                                      j + self.patch_size[1], ...])
+                  for i, j in self.corners[idx * self.batch_size:batch_end]]))
 
         return dict(input=np.asarray(img_batch), coord=np.asarray(coord_batch))
 
@@ -44,8 +49,10 @@ class StitchingGenerator(Sequence):
         '''
         # corners of patches.
         step_size = np.asarray(self.patch_size) - 2 * self.border
-        x = range(0, self.image.shape[0] - self.patch_size[0], step_size[0])
-        y = range(0, self.image.shape[1] - self.patch_size[1], step_size[1])
+        x = list(
+            range(0, self.image.shape[0] - self.patch_size[0], step_size[0]))
+        y = list(
+            range(0, self.image.shape[1] - self.patch_size[1], step_size[1]))
         x.append(self.image.shape[0] - self.patch_size[0])
         y.append(self.image.shape[1] - self.patch_size[1])
         self.corners = [(i, j) for i in x for j in y]
@@ -76,8 +83,8 @@ def predict_complete(model, image, batch_size=None, patch_size=None,
 
     if border > 0 or any(diff_shape > 0):
         pad_width = [(
-            border + dx / 2,
-            border + dx / 2 + dx % 2,
+            border + dx // 2,
+            border + dx // 2 + dx % 2,
         ) for idx, dx in enumerate(diff_shape)] + [
             (0, 0),
         ]
@@ -101,7 +108,7 @@ def predict_complete(model, image, batch_size=None, patch_size=None,
 
     for img_batch, coord_batch in (
         (batch['input'], batch['coord'])
-            for batch in (generator[idx] for idx in xrange(len(generator)))):
+            for batch in (generator[idx] for idx in range(len(generator)))):
 
         # predict
         pred_batch = model.predict_on_batch(img_batch)
@@ -120,20 +127,20 @@ def predict_complete(model, image, batch_size=None, patch_size=None,
             for key, pred in zip(model.output_names, pred_batch):
 
                 border_slices = [
-                    slice(border, -border) for _ in xrange(pred[idx].ndim - 1)
+                    slice(border, -border) for _ in range(pred[idx].ndim - 1)
                 ]
 
                 # TODO implement smooth stitching.
                 responses[key][slices] = pred[idx][border_slices]
 
-    if border > 0 or any(diff_shape > 0):
+    if border > 0 or any(np.asarray(diff_shape) > 0):
 
         slices = [
-            slice(border + dx / 2, -(border + dx / 2 + dx % 2))
+            slice(border + dx // 2, -(border + dx // 2 + dx % 2))
             for dx in diff_shape
         ]
 
-        for key, val in responses.iteritems():
+        for key, val in responses.items():
             responses[key] = val[slices]
 
     return responses

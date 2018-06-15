@@ -1,3 +1,9 @@
+from __future__ import absolute_import
+from __future__ import division
+from __future__ import print_function
+from __future__ import unicode_literals
+from builtins import range
+
 from keras.engine import Input
 from keras.engine import Model
 from keras.layers import Dropout
@@ -45,7 +51,7 @@ def identity_block(input_tensor,
                    filters,
                    stage,
                    block,
-                   dropout_rate=0):
+                   dropout_rate=None):
     """The identity block is the block that has no conv layer at shortcut.
 
     NOTE This is the original block taken from the keras implementation.
@@ -60,6 +66,9 @@ def identity_block(input_tensor,
     # Returns
         Output tensor for the block.
     """
+    if dropout_rate is None:
+        dropout_rate = 0
+
     filters1, filters2, filters3 = filters
     if K.image_data_format() == 'channels_last':
         bn_axis = 3
@@ -193,7 +202,7 @@ def _construct_resnet(img_input,
     n_features *= 2
     x = conv_block(
         x, 3, [n_features, n_features, n_features * 4], stage=3, block='a')
-    for ii in xrange(1, 4):
+    for ii in range(1, 4):
         x = identity_block(
             x,
             3, [n_features, n_features, n_features * 4],
@@ -208,7 +217,7 @@ def _construct_resnet(img_input,
     n_features *= 2
     x = conv_block(
         x, 3, [n_features, n_features, n_features * 4], stage=4, block='a')
-    for ii in xrange(1, 6):
+    for ii in range(1, 6):
         x = identity_block(
             x,
             3, [n_features, n_features, n_features * 4],
@@ -223,7 +232,7 @@ def _construct_resnet(img_input,
     n_features *= 2
     x = conv_block(
         x, 3, [n_features, n_features, n_features * 4], stage=5, block='a')
-    for ii in xrange(1, 3):
+    for ii in range(1, 3):
         x = identity_block(
             x,
             3, [n_features, n_features, n_features * 4],
@@ -244,27 +253,27 @@ def _construct_decoding_path(feature_levels, n_blocks, dropout_rate=0):
     n_features = feature_levels[-1].get_shape()[3].value
 
     x = feature_levels[-1]
-    for level in xrange(2, len(feature_levels) + 1):
+    for level in range(2, len(feature_levels) + 1):
 
-        n_features /= 2
-        features = [n_features / 4, n_features / 4, n_features]
+        n_features //= 2
+        features = [n_features // 4, n_features // 4, n_features]
 
         x = UpSampling2D(2)(x)
         y = feature_levels[-level]
 
         crop_shape = get_crop_shape(
-            [y.get_shape()[idx].value for idx in xrange(1, 3)],
-            [x.get_shape()[idx].value for idx in xrange(1, 3)])
+            [y.get_shape()[idx].value for idx in range(1, 3)],
+            [x.get_shape()[idx].value for idx in range(1, 3)])
 
-        if np.any(crop_shape > 0):
+        if np.any(np.asarray(crop_shape) > 0):
             x = Cropping2D(
                 cropping=crop_shape, name='UP{:02}_CRPX'.format(level))(x)
 
         crop_shape = get_crop_shape(
-            [x.get_shape()[idx].value for idx in xrange(1, 3)],
-            [y.get_shape()[idx].value for idx in xrange(1, 3)])
+            [x.get_shape()[idx].value for idx in range(1, 3)],
+            [y.get_shape()[idx].value for idx in range(1, 3)])
 
-        if np.any(crop_shape > 0):
+        if np.any(np.asarray(crop_shape) > 0):
             y = Cropping2D(
                 cropping=crop_shape, name='UP{:02}_CRPY'.format(level))(y)
         x = concatenate([x, y], axis=3, name='UP{:02}_CONC'.format(level))
@@ -272,7 +281,7 @@ def _construct_decoding_path(feature_levels, n_blocks, dropout_rate=0):
         x = conv_block(
             x, 3, features, stage=5 + level, block=chr(98), strides=1)
 
-        for block in xrange(1, n_blocks):
+        for block in range(1, n_blocks):
             x = identity_block(
                 x,
                 3,

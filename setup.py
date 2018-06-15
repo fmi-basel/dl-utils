@@ -22,7 +22,8 @@ setup(
         'scipy',
         'keras==2.0.8',
         'opencv-python>=3.4',
-        'skimage>=0.13'
+        'scikit-image>=0.13',
+        'scikit-learn'
     ],
     # I believe zipping makes the import rather slow.
     zip_safe=False)

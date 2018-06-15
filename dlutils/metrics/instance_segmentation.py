@@ -1,3 +1,9 @@
+from __future__ import absolute_import
+from __future__ import division
+from __future__ import print_function
+from __future__ import unicode_literals
+from builtins import range
+
 import numpy as np
 
 from sklearn.metrics import confusion_matrix
@@ -27,7 +33,7 @@ def instance_intersection_over_union(y_true, y_pred, bg_label=0):
     union = union - intersection
 
     # remove bg_label rows/columns
-    for axis in xrange(2):
+    for axis in range(2):
         union = np.delete(union, bg_label, axis)
         intersection = np.delete(intersection, bg_label, axis)
 
@@ -39,7 +45,7 @@ def _instance_precision_recall(iou_matrix, threshold):
 
     '''
     matches = iou_matrix > threshold
-    true_positives = min(matches.max(axis=axis).sum() for axis in xrange(2))
+    true_positives = min(matches.max(axis=axis).sum() for axis in range(2))
     precision = true_positives / float(matches.shape[1])
     recall = true_positives / float(matches.shape[0])
     return precision, recall
@@ -67,8 +73,7 @@ def instance_prauc(y_true, y_pred, overlap_thresholds=None):
     precision = []
     for overlap in overlap_thresholds:
         matches = iou > overlap
-        true_positives = min(
-            matches.max(axis=axis).sum() for axis in xrange(2))
+        true_positives = min(matches.max(axis=axis).sum() for axis in range(2))
         precision.append(true_positives / float(matches.shape[1]))
         recall.append(true_positives / float(matches.shape[0]))
 

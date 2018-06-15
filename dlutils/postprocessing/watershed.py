@@ -1,3 +1,7 @@
+from __future__ import absolute_import
+from __future__ import division
+from __future__ import print_function
+
 from skimage.morphology import watershed
 from scipy.ndimage.filters import gaussian_filter
 from scipy.ndimage.filters import maximum_filter

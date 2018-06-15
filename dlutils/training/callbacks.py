@@ -1,3 +1,7 @@
+from __future__ import absolute_import
+from __future__ import division
+from __future__ import print_function
+
 from keras.callbacks import ModelCheckpoint, \
         TensorBoard, CSVLogger, LearningRateScheduler
 from dlutils.training.scheduler import CosineAnnealingSchedule

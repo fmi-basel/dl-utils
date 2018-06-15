@@ -24,7 +24,7 @@ def test_patch_sampler(patch_size, image_size, n_channels, n_images):
     '''
     images = [
         np.random.randn(*(image_size) + (n_channels, ))
-        for _ in xrange(n_images)
+        for _ in range(n_images)
     ]
 
     patches = get_random_patch(images, patch_size)

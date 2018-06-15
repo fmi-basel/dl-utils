@@ -22,7 +22,7 @@ def create_model():
         Convolution2D(32, (3, 3), activation='relu', input_shape=(28, 28, 1)))
     model.add(MaxPooling2D())
 
-    for _ in xrange(2):
+    for _ in range(2):
         model.add(Convolution2D(32, (3, 3)))
         model.add(BatchNormalization())
         model.add(Activation('relu'))
@@ -65,7 +65,7 @@ def test_lr_finder(steps=100):
 
     suggested = []
 
-    for _ in xrange(reps):
+    for _ in range(reps):
         model = create_model()
         compile(model)
         lrf = lr_finder(

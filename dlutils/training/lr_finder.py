@@ -1,3 +1,8 @@
+from __future__ import absolute_import
+from __future__ import division
+from __future__ import print_function
+from builtins import range
+
 from keras.callbacks import Callback
 
 from scipy.ndimage.filters import gaussian_filter1d
@@ -46,7 +51,7 @@ class LRFinderCallback(Callback):
 
     def on_train_end(self, logs=None):
         estimate = self.suggest_lr(sigma=3)
-        print 'Suggested learning rate: {:1.3e}'.format(estimate)
+        print('Suggested learning rate: {:1.3e}'.format(estimate))
 
     @property
     def current_lr(self):
@@ -95,7 +100,7 @@ def lr_finder_plot(learning_rates, losses, sigma=1, axarr=None):
 
     estimates = [
         suggest_lr(learning_rates, losses[:, ii], sigma=sigma)
-        for ii in xrange(losses.shape[1])
+        for ii in range(losses.shape[1])
     ]
     estimate = np.mean(estimates)
 
