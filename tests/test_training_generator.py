@@ -77,7 +77,6 @@ def test_2d_sampler(n_handles, samples_per_handle, batch_size):
     for batch_idx in range(expected_length):
         in_batch, out_batch = generator[0]
 
-        print(in_batch['input'].shape, end=' ')
         expected_shape = (batch_size, patch_size[0], patch_size[1], n_channels)
         assert list(in_batch.keys())[0] == 'input'
 
@@ -127,7 +126,6 @@ def test_generator_with_augmentation(n_handles=5,
     for batch_idx in range(expected_length):
         in_batch, out_batch = generator[0]
 
-        print(in_batch['input'].shape, end=' ')
         expected_shape = (batch_size, patch_size[0], patch_size[1], n_channels)
         assert list(in_batch.keys())[0] == 'input'
 
