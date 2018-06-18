@@ -1,33 +1,21 @@
 from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
-from __future__ import unicode_literals
 
 from keras.layers import Convolution2D
 from keras.engine import Model
 
 
-def get_base_model_name(name, **kwargs):
+def get_model_name(name, **kwargs):
+    '''generate a model name describing the architecture.
+
+    '''
     if name == 'resnet':
         from dlutils.models.fcn_resnet import get_model_name as resnet_name
         return resnet_name(**kwargs)
     elif name == 'unet':
         from dlutils.models.unet import get_model_name as unet_name
         return unet_name(**kwargs)
-    else:
-        raise NotImplementedError('Model {} not known!'.format(name))
-
-
-def construct_base_model(name, **model_params):
-    '''Base model factory.
-
-    '''
-    if name == 'resnet':
-        from dlutils.models.fcn_resnet import ResnetBase
-        return ResnetBase(**model_params)
-    elif name == 'unet':
-        from dlutils.models.unet import UnetBase
-        return UnetBase(**model_params)
     else:
         raise NotImplementedError('Model {} not known!'.format(name))
 

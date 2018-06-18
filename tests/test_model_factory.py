@@ -1,4 +1,4 @@
-from dlutils.models.utils import construct_base_model
+from dlutils.models.factory import construct_base_model
 from dlutils.models.utils import add_fcn_output_layers
 
 from itertools import product
@@ -20,10 +20,10 @@ def cleanup():
     "name,input_shape,n_levels,dropout",
     list(
         product(
-            ['unet', 'resnet'],
+            ['unet', 'resnet', 'resnext'],
             [(259, 297, 1), (300, 313, 2)],  # input shapes
             [3, 5],  # n_levels
-            [0, 0.5],  # dropout
+            [0, 0.05],  # dropout
         )))
 def test_constructor(name, input_shape, n_levels, dropout):
     '''
