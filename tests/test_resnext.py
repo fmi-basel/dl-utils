@@ -21,11 +21,11 @@ def cleanup():
     list(
         product(
             [(259, 297, 1), (302, 315, 3)],  # input shapes
-            [2, 5],  # n_levels
-            [0.3, 1.2],  # width
-            [2, 3] # n_blocks
+            [2, 4, 5],  # n_levels
+            [1., 2.],  # width
+            [2, ] # n_blocks
         )))
-def test_resnet_setup(input_shape, n_levels, width, n_blocks):
+def test_resnext_setup(input_shape, n_levels, width, n_blocks):
     '''
     '''
     batch_size = 3
@@ -61,4 +61,4 @@ def test_resnet_setup(input_shape, n_levels, width, n_blocks):
 
 
 if __name__ == '__main__':
-    test_resnet_setup((303, 301, 1), 4, 1, 3)
+    test_resnext_setup((303, 301, 1), 4, 1, 3)
