@@ -62,7 +62,8 @@ class ResnextConstructor(object):
         self.padding = 'same'
 
     def add_bn_activation(self, input_tensor):
-        '''
+        '''adds batchnormalization layer and leaky ReLu activation.
+
         '''
         x = BatchNormalization(axis=self.bn_axis)(input_tensor)
         x = LeakyReLU()(x)
@@ -74,9 +75,10 @@ class ResnextConstructor(object):
                            features_out,
                            strides=(1, 1),
                            project=False):
+        '''adds a basic residual block with 1x1, 3x3 and 1x1 convolutions
+        and the shortcut.
+        
         '''
-        '''
-        print(strides)
         x = Conv2D(
             features_in,
             kernel_size=(1, 1),
@@ -112,12 +114,9 @@ class ResnextConstructor(object):
                 strides=strides,
                 padding=self.padding)(shortcut)
             shortcut = BatchNormalization()(shortcut)
-        print('x=       ', x)
-        print('shortcut=', shortcut)
 
         x = add([shortcut, x])
         x = LeakyReLU()(x)
-        print('done')
         return x
 
     def construct_decoding_path(self, feature_levels):
@@ -130,8 +129,6 @@ class ResnextConstructor(object):
         x = feature_levels[-1]
         for level in range(2, len(feature_levels) + 1):
 
-            n_features //= 2
-
             x = UpSampling2D(2)(x)
             y = feature_levels[-level]
 
@@ -143,15 +140,14 @@ class ResnextConstructor(object):
                 x = Cropping2D(
                     cropping=crop_shape, name='UP{:02}_CRPX'.format(level))(x)
 
-                crop_shape = get_crop_shape(
-                    [x.get_shape()[idx].value for idx in range(1, 3)],
-                    [y.get_shape()[idx].value for idx in range(1, 3)])
+            crop_shape = get_crop_shape(
+                [x.get_shape()[idx].value for idx in range(1, 3)],
+                [y.get_shape()[idx].value for idx in range(1, 3)])
 
             if np.any(np.asarray(crop_shape) > 0):
                 y = Cropping2D(
                     cropping=crop_shape, name='UP{:02}_CRPY'.format(level))(y)
-                x = concatenate(
-                    [x, y], axis=3, name='UP{:02}_CONC'.format(level))
+            x = concatenate([x, y], axis=3, name='UP{:02}_CONC'.format(level))
 
             for block in range(self.n_blocks):
                 x = self.add_residual_block(
@@ -160,6 +156,9 @@ class ResnextConstructor(object):
                     features_out=n_features,
                     strides=1,
                     project=block == 0)
+
+            # reduce features for next level.
+            n_features //= 2
 
         return x
 
