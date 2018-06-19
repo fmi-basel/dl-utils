@@ -13,16 +13,16 @@ from keras.layers import Cropping2D
 from keras.layers import ZeroPadding2D
 from keras.layers import Conv2D
 from keras.layers import BatchNormalization
-from keras.layers import Activation
 from keras.layers import add
 from keras.layers import MaxPooling2D
 from keras.layers import LeakyReLU
-from keras.layers import Lambda
 from keras.engine.topology import get_source_inputs
 
 from keras import backend as K
 
 from dlutils.models.utils import get_crop_shape
+from dlutils.layers.grouped_conv import GroupedConv2D
+
 import numpy as np
 
 import logging
@@ -68,43 +68,15 @@ class ResnextConstructor(object):
         x = LeakyReLU()(x)
         return x
 
-    def add_grouped_convolution(self, input_tensor, kernel_size, filters,
-                                strides):
-        '''
-        '''
-        if self.cardinality == 1:
-            return Conv2D(
-                input_tensor,
-                kernel_size=kernel_size,
-                strides=strides,
-                padding=self.padding)
-
-        assert filters % self.cardinality == 0, \
-            'Number of filters must be divisible by cardinality'
-        depth = filters // self.cardinality
-
-        groups = []
-        for group_idx in range(self.cardinality):
-            group = Lambda(
-                lambda z: z[:, :, :, group_idx * depth:group_idx * depth + depth]
-            )(input_tensor)
-            groups.append(
-                Conv2D(
-                    depth,
-                    kernel_size=kernel_size,
-                    strides=strides,
-                    padding=self.padding)(group))
-
-        return concatenate(groups)
-
     def add_residual_block(self,
                            input_tensor,
                            features_in,
                            features_out,
                            strides=(1, 1),
                            project=False):
-        """
-        """
+        '''
+        '''
+        print(strides)
         x = Conv2D(
             features_in,
             kernel_size=(1, 1),
@@ -112,8 +84,13 @@ class ResnextConstructor(object):
             padding=self.padding)(input_tensor)
         x = self.add_bn_activation(x)
 
-        x = self.add_grouped_convolution(
-            x, kernel_size=(3, 3), filters=features_in, strides=strides)
+        x = GroupedConv2D(
+            features_in,
+            kernel_size=(3, 3),
+            cardinality=self.cardinality,
+            padding=self.padding,
+            strides=strides,
+            activation=None)(x)
         x = self.add_bn_activation(x)
 
         if self.dropout > 0:
@@ -135,9 +112,12 @@ class ResnextConstructor(object):
                 strides=strides,
                 padding=self.padding)(shortcut)
             shortcut = BatchNormalization()(shortcut)
+        print('x=       ', x)
+        print('shortcut=', shortcut)
 
         x = add([shortcut, x])
         x = LeakyReLU()(x)
+        print('done')
         return x
 
     def construct_decoding_path(self, feature_levels):
@@ -261,9 +241,8 @@ class ResnextConstructor(object):
         final_model = Model(
             inputs=inputs,
             outputs=outputs,
-            name=get_model_name(self.width, self.cardinality,
-                                self.n_levels, self.n_blocks,
-                                self.dropout))
+            name=get_model_name(self.width, self.cardinality, self.n_levels,
+                                self.n_blocks, self.dropout))
 
         return final_model
 
