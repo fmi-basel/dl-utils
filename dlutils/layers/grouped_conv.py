@@ -4,14 +4,7 @@ from __future__ import print_function
 
 import tensorflow as tf
 
-from keras.engine.topology import Layer
 from keras.layers.convolutional import _Conv as KerasConvBase
-from keras.engine import InputSpec
-from keras.utils import conv_utils
-from keras import activations
-from keras import regularizers
-from keras import constraints
-from keras import initializers
 
 from keras import backend as K
 
@@ -167,10 +160,8 @@ class GroupedConv2D(KerasConvBase):
                     output, self.biases[idx], data_format=self.data_format)
             groups.append(output)
 
-        # concatenate again.
+        # concatenate again and apply activation.
         outputs = K.concatenate(groups, axis=self.channel_axis)
-
-        #
         if self.activation is not None:
             return self.activation(outputs)
         return outputs
