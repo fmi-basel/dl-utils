@@ -60,13 +60,21 @@ class ResnextConstructor(object):
         self.n_blocks = n_blocks
         self.dropout = dropout if dropout is not None else 0
         self.padding = 'same'
+        self.block_count = 0
+
+    def layer_name(self, prefix):
+        '''generate unique id for given layer prefix.
+
+        '''
+        return prefix + '_' + str(K.get_uid(prefix))
 
     def add_bn_activation(self, input_tensor):
         '''adds batchnormalization layer and leaky ReLu activation.
 
         '''
-        x = BatchNormalization(axis=self.bn_axis)(input_tensor)
-        x = LeakyReLU()(x)
+        x = BatchNormalization(
+            axis=self.bn_axis, name=self.layer_name('bn'))(input_tensor)
+        x = LeakyReLU(name=self.layer_name('lrelu'))(x)
         return x
 
     def add_residual_block(self,
@@ -77,13 +85,14 @@ class ResnextConstructor(object):
                            project=False):
         '''adds a basic residual block with 1x1, 3x3 and 1x1 convolutions
         and the shortcut.
-        
+
         '''
         x = Conv2D(
             features_in,
             kernel_size=(1, 1),
             strides=(1, 1),
-            padding=self.padding)(input_tensor)
+            padding=self.padding,
+            name=self.layer_name('conv1x1'))(input_tensor)
         x = self.add_bn_activation(x)
 
         x = GroupedConv2D(
@@ -92,19 +101,22 @@ class ResnextConstructor(object):
             cardinality=self.cardinality,
             padding=self.padding,
             strides=strides,
-            activation=None)(x)
+            activation=None,
+            name=self.layer_name('conv3x3g{}'.format(self.cardinality)))(x)
         x = self.add_bn_activation(x)
 
         if self.dropout > 0:
-            x = Dropout(self.dropout)(x)
+            x = Dropout(self.dropout, name=self.layer_name('do'))(x)
 
         x = Conv2D(
             features_out,
             kernel_size=(1, 1),
             strides=(1, 1),
-            padding=self.padding)(x)
+            padding=self.padding,
+            name=self.layer_name('conv1x1'))(x)
 
-        x = BatchNormalization(axis=self.bn_axis)(x)
+        x = BatchNormalization(
+            axis=self.bn_axis, name=self.layer_name('bn'))(x)
 
         shortcut = input_tensor
         if (strides != (1, 1) and strides != 1) or project:
@@ -112,15 +124,17 @@ class ResnextConstructor(object):
                 features_out,
                 kernel_size=(1, 1),
                 strides=strides,
-                padding=self.padding)(shortcut)
-            shortcut = BatchNormalization()(shortcut)
+                padding=self.padding,
+                name=self.layer_name('conv1x1'))(shortcut)
+            shortcut = BatchNormalization(name=self.layer_name('bn'))(shortcut)
 
         x = add([shortcut, x])
-        x = LeakyReLU()(x)
+        x = LeakyReLU(name=self.layer_name('lrelu'))(x)
         return x
 
     def construct_decoding_path(self, feature_levels):
-        '''
+        '''build the decoding (i.e. upconvolving path of the network).
+
         '''
         assert 1 <= self.n_blocks, \
             'n_blocks must be >= 1'
@@ -129,7 +143,7 @@ class ResnextConstructor(object):
         x = feature_levels[-1]
         for level in range(2, len(feature_levels) + 1):
 
-            x = UpSampling2D(2)(x)
+            x = UpSampling2D(2, name=self.layer_name('up2'))(x)
             y = feature_levels[-level]
 
             crop_shape = get_crop_shape(
@@ -138,7 +152,7 @@ class ResnextConstructor(object):
 
             if np.any(np.asarray(crop_shape) > 0):
                 x = Cropping2D(
-                    cropping=crop_shape, name='UP{:02}_CRPX'.format(level))(x)
+                    cropping=crop_shape, name=self.layer_name('crop'))(x)
 
             crop_shape = get_crop_shape(
                 [x.get_shape()[idx].value for idx in range(1, 3)],
@@ -146,8 +160,8 @@ class ResnextConstructor(object):
 
             if np.any(np.asarray(crop_shape) > 0):
                 y = Cropping2D(
-                    cropping=crop_shape, name='UP{:02}_CRPY'.format(level))(y)
-            x = concatenate([x, y], axis=3, name='UP{:02}_CONC'.format(level))
+                    cropping=crop_shape, name=self.layer_name('crop'))(y)
+            x = concatenate([x, y], axis=3, name=self.layer_name('conc'))
 
             for block in range(self.n_blocks):
                 x = self.add_residual_block(
@@ -170,13 +184,17 @@ class ResnextConstructor(object):
 
         n_features = int(128 * self.width)
 
-        x = ZeroPadding2D(padding=(3, 3), name='conv1_pad')(img_input)
+        x = ZeroPadding2D(
+            padding=(3, 3), name=self.layer_name('pad'))(img_input)
         x = Conv2D(
-            n_features, (7, 7), strides=(2, 2), padding='same',
-            name='conv1')(x)
+            n_features, (7, 7),
+            strides=(2, 2),
+            padding='same',
+            name=self.layer_name('conv7x7'))(x)
         x = C1 = self.add_bn_activation(x)
 
-        x = MaxPooling2D((3, 3), strides=(2, 2))(x)
+        x = MaxPooling2D(
+            (3, 3), strides=(2, 2), name=self.layer_name('pool'))(x)
 
         for block in range(3):
             x = self.add_residual_block(
