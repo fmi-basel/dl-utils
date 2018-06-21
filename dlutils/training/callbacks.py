@@ -22,7 +22,7 @@ class ModelConfigSaver(Callback):
         '''
         self.filename = filename
 
-    def on_train_begin(self, **kwargs):
+    def on_train_begin(self, logs={}, **kwargs):
         '''
         '''
         logger = logging.getLogger(__name__)
