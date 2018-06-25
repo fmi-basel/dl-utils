@@ -33,16 +33,18 @@ def add_fcn_output_layers(model,
 
     if isinstance(names, list) and isinstance(n_classes, list):
         assert len(names) == len(n_classes)
+    if not isinstance(activation, list):
+        activation = len(names) * [activation, ]
     # TODO handle other cases
 
     outputs = []
-    for name, classes in zip(names, n_classes):
+    for name, classes, act in zip(names, n_classes, activation):
         outputs.append(
             Convolution2D(
                 classes,
                 kernel_size=kernel_size,
                 name=name,
-                activation=activation)(last_layer))
+                activation=act)(last_layer))
     model = Model(model.inputs, outputs, name=model.name)
     return model
 

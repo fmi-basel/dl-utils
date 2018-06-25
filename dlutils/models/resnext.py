@@ -263,6 +263,41 @@ class ResnextConstructor(object):
 
         return final_model
 
+    def construct_without_decoder(self,
+                                  input_shape=None,
+                                  input_tensor=None,
+                                  batch_size=None):
+        '''
+        '''
+        # input handling
+        if input_tensor is None:
+            img_input = Input(shape=input_shape, name='input')
+        else:
+            if not K.is_keras_tensor(input_tensor):
+                img_input = Input(tensor=input_tensor, shape=input_shape)
+            else:
+                img_input = input_tensor
+        if K.image_data_format() == 'channels_last':
+            self.bn_axis = 3
+        else:
+            self.bn_axis = 1
+
+        # build encoding path.
+        feature_levels = self.construct_encoding_path(img_input)
+
+        # handle inputs.
+        if input_tensor is not None:
+            inputs = get_source_inputs(input_tensor)
+        else:
+            inputs = img_input
+
+        final_model = Model(
+            inputs=inputs,
+            outputs=feature_levels[-1],
+            name=get_model_name(self.width, self.cardinality, self.n_levels, 0,
+                                self.dropout))
+        return final_model
+
 
 def ResneXtBase(input_shape=None, input_tensor=None, batch_size=None,
                 **kwargs):
