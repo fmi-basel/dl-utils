@@ -50,6 +50,7 @@ def add_bb_regression_heads(model,
         x = Convolution2D(
             n_filters,
             kernel_size=kernel_size,
+            padding='same',
             name='anchor_c3x3_{}'.format(i),
             activation='relu')(x)
 
@@ -57,6 +58,7 @@ def add_bb_regression_heads(model,
         Convolution2D(
             n_classes,
             kernel_size=kernel_size,
+            padding='same',
             name='anchor_pred',
             activation='sigmoid')(x))
 
@@ -66,6 +68,7 @@ def add_bb_regression_heads(model,
         x = Convolution2D(
             n_filters,
             kernel_size=kernel_size,
+            padding='same',
             name='offset_c3x3_{}'.format(i),
             activation='relu')(x)
 
@@ -74,6 +77,7 @@ def add_bb_regression_heads(model,
         Convolution2D(
             regression_channels,
             kernel_size=kernel_size,
+            padding='same',
             name='offset_pred',
             activation='linear')(x))  # linear activation for offset
 
