@@ -1,9 +1,10 @@
+from __future__ import print_function
+
 from dlutils.training.generator import TrainingGenerator
 from dlutils.training.generator import LazyTrainingHandle
 from dlutils.training.augmentations import ImageDataAugmentation
 
 from scipy.stats import norm as gaussian_dist
-from scipy.misc import face as example_image
 
 import numpy as np
 
@@ -27,6 +28,11 @@ class Handle(LazyTrainingHandle):
         self.shape = shape
 
     def load(self, **kwargs):
+
+        if all(
+                self.get(key, None) is not None
+                for key in self.get_input_keys() + self.get_output_keys()):
+            return
         self['input'] = np.random.randn(*self.shape)
         self['input'][5:10, ...] += 10
         self['output_a'] = self['input'] > 1
@@ -105,7 +111,7 @@ def test_generator_with_augmentation(n_handles=5,
     handles = [
         Handle(shape=img_shape + (n_channels, )) for _ in range(n_handles)
     ]
-    
+
     generator = TrainingGenerator(
         handles,
         patch_size=patch_size,
@@ -142,5 +148,28 @@ def test_generator_with_augmentation(n_handles=5,
                     key, val.shape, expected_shape))
 
 
+def test_generator_completeness(n_handles=10):
+    '''
+    '''
+    img_shape = (10, 10)
+    n_channels = 1
+    handles = [
+        Handle(shape=img_shape + (n_channels, )) for _ in range(n_handles)
+    ]
+    for counter, handle in enumerate(handles):
+        handle.load()
+        handle['input'] = np.ones(img_shape + (n_channels, )) * counter
+
+    generator = TrainingGenerator(
+        handles=handles, buffer=True, patch_size=(3, 3), batch_size=1)
+    for epoch in range(5):
+        vals = []
+        for batch in generator:
+            assert batch[0]['input'].min() == batch[0]['input'].max()
+            vals.append(batch[0]['input'].min())
+        generator.on_epoch_end()
+        assert sorted(vals) == range(n_handles)
+
+
 if __name__ == '__main__':
-    test_generator_with_augmentation()
+    test_generator_completeness(n_handles=10)
