@@ -16,6 +16,9 @@ def get_model_name(name, **kwargs):
     elif name == 'unet':
         from dlutils.models.unet import get_model_name as unet_name
         return unet_name(**kwargs)
+    elif name == 'resnext':
+        from dlutils.models.resnext import get_model_name as resnext_name
+        return resnext_name(**kwargs)
     else:
         raise NotImplementedError('Model {} not known!'.format(name))
 
@@ -34,16 +37,16 @@ def add_fcn_output_layers(model,
     if isinstance(names, list) and isinstance(n_classes, list):
         assert len(names) == len(n_classes)
     if not isinstance(activation, list):
-        activation = len(names) * [activation, ]
+        activation = len(names) * [
+            activation,
+        ]
     # TODO handle other cases
 
     outputs = []
     for name, classes, act in zip(names, n_classes, activation):
         outputs.append(
             Convolution2D(
-                classes,
-                kernel_size=kernel_size,
-                name=name,
+                classes, kernel_size=kernel_size, name=name,
                 activation=act)(last_layer))
     model = Model(model.inputs, outputs, name=model.name)
     return model
