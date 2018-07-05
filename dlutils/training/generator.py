@@ -108,8 +108,8 @@ class TrainingGenerator(Sequence):
 
         # indexing wraps around to support batches of larger size than
         # len(handles) when samples_per_handle > 1
-        for handle in (self.handles[idx % len(self.handles)]
-                       for idx in range(self.batch_size)):
+        for handle in (self.handles[(idx % len(self.handles) + ii) % len(self.handles)]
+                       for ii in range(self.batch_size)):
             handle.load()  # make sure data is available.
             patches = handle.get_random_patch(self.patch_size,
                                               self.augmentator)
@@ -124,10 +124,12 @@ class TrainingGenerator(Sequence):
 
         # Turn each list into a numpy array
         for key in inputs.keys():
-            inputs[key] = np.asarray(inputs[key])
+            if not isinstance(inputs[key], np.ndarray):
+                inputs[key] = np.asarray(inputs[key])
 
         for key in outputs.keys():
-            outputs[key] = np.asarray(outputs[key])
+            if not isinstance(outputs[key], np.ndarray):
+                outputs[key] = np.asarray(outputs[key])
 
         return inputs, outputs
 
