@@ -1,5 +1,5 @@
 from keras import backend as K
-from tensorflow import where, gather_nd
+from tensorflow import where, gather_nd, clip_by_value
 
 
 def masked_smooth_l1_loss(mask_val, sigma=1.0):
@@ -78,6 +78,8 @@ def focal_loss(alpha=0.5, gamma=0.5):
         focal_weight = where(K.equal(labels, 1), 1 - predictions, predictions)
         focal_weight = alpha_factor * focal_weight**gamma
 
+        eps = 1e-10
+        predictions = clip_by_value(predictions, eps, 1 - eps)
         cls_loss = focal_weight * K.binary_crossentropy(labels, predictions)
 
         # compute the normalizer: the number of positive anchors
