@@ -27,7 +27,7 @@ def masked_separator_loss(mask_val):
 
         loss = K.abs(predictions - targets)
 
-        normalizer = K.minimum(1, K.shape(indices)[0])
+        normalizer = K.maximum(1, K.shape(indices)[0])
         normalizer = K.cast(normalizer, K.floatx())
 
         return K.sum(loss) / normalizer
