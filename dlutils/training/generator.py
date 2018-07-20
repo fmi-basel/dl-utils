@@ -3,9 +3,11 @@ from __future__ import division
 from __future__ import print_function
 from builtins import range
 
-from keras.utils import Sequence
+import os
+import logging
 
 import numpy as np
+from keras.utils import Sequence
 
 from dlutils.training.sampling import get_random_patch
 
@@ -26,11 +28,12 @@ class LazyTrainingHandle(dict):
         '''
         return dict(
             list(
-                zip(self.get_input_keys() + self.get_output_keys(),
+                zip(
+                    self.get_input_keys() + self.get_output_keys(),
                     get_random_patch(
                         [
-                            self[key] for key in
-                            self.get_input_keys() + self.get_output_keys()
+                            self[key] for key in self.get_input_keys() +
+                            self.get_output_keys()
                         ],
                         patch_size=patch_size,
                         augmentator=augmentator))))
@@ -99,6 +102,12 @@ class TrainingGenerator(Sequence):
         '''return idx-th batch of size batch_size
 
         '''
+        logger = logging.getLogger(__name__)
+        logger.debug('[%i] Fetching batch %i: [%i, .., %i]', os.getpid(), idx,
+                     idx % len(self.handles),
+                     (idx % len(self.handles) + self.batch_size - 1) % len(
+                         self.handles))
+
         if idx >= len(self):
             raise IndexError('Index out of bounds {} >= {}'.format(
                 idx, len(self)))
@@ -108,8 +117,8 @@ class TrainingGenerator(Sequence):
 
         # indexing wraps around to support batches of larger size than
         # len(handles) when samples_per_handle > 1
-        for handle in (self.handles[(idx % len(self.handles) + ii) % len(self.handles)]
-                       for ii in range(self.batch_size)):
+        for handle in (self.handles[(idx % len(self.handles) + ii) % len(
+                self.handles)] for ii in range(self.batch_size)):
             handle.load()  # make sure data is available.
             patches = handle.get_random_patch(self.patch_size,
                                               self.augmentator)
