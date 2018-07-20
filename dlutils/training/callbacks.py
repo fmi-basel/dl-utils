@@ -35,6 +35,12 @@ class ModelConfigSaver(Callback):
         with open(self.filename, 'w') as fout:
             fout.write(self.model.to_yaml())
 
+    def on_train_end(self, logs={}, **kwargs):
+        '''
+        '''
+        filename = self.filename.replace('architecture.yaml', 'latest.h5')
+        self.model.save_weights(filename, overwrite=True)
+
 
 def create_callbacks(outdir,
                      nth_checkpoint,
@@ -45,7 +51,9 @@ def create_callbacks(outdir,
                      restart_decay=1.0):
     '''Add basic callbacks for training.
 
-    - ModelCheckpoint for latest and every nth epoch.
+    - ModelConfigSaver for architecture and final weights.
+    - ModelCheckpoint for every nth epoch.
+    - ModelCheckpoint for best val score.
     - CSVLogger for all metrics.
     - Tensorboard for model graph.
     - Cosine annealing learning rate schedule
@@ -60,11 +68,11 @@ def create_callbacks(outdir,
 
     callbacks = []
     callbacks.append(
-        ModelConfigSaver(os.path.join(outdir, 'model_architecture.yaml')))
+        ModelConfigSaver(os.path.join(outdir, 'model_architecture.yaml'), ))
     callbacks.append(
         ModelCheckpoint(
-            os.path.join(outdir, 'model_latest.h5'),
-            period=1,
+            os.path.join(outdir, 'model_best.h5'),
+            save_best_only=True,
             save_weights_only=True))
     if nth_checkpoint < epochs:
         callbacks.append(
