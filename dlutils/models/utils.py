@@ -47,7 +47,8 @@ def add_fcn_output_layers(model,
         outputs.append(
             Convolution2D(
                 classes, kernel_size=kernel_size, name=name,
-                activation=act)(last_layer))
+                activation=act,
+                padding='same')(last_layer))
     model = Model(model.inputs, outputs, name=model.name)
     return model
 

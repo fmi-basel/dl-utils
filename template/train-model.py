@@ -81,15 +81,16 @@ def get_base_config():
         training=dict(
             epochs=200,
             initial_epoch=0,
-            use_multiprocessing=True,
+            use_multiprocessing=False,
             workers=4,  # evil
             max_queue_size=32,
             verbose=2),
         optimizer=dict(name='adam'),
+        generator=dict(samples_per_handle=1),
         augmentation=dict(
             intensity_shift=gaussian_dist(loc=0, scale=.3),
             intensity_scaling=gaussian_dist(loc=1, scale=0.1),
-            # intensity_swap=True,
+            intensity_swap=False,
             flip=True,
             rotation=uniform_dist(-10., 20),
             shear=gaussian_dist(loc=0, scale=10.),
@@ -178,7 +179,7 @@ def process(taskId=None):
         train_handles,
         patch_size=input_shape[:-1],
         batch_size=config['model']['batch_size'],
-        samples_per_handle=1,
+        samples_per_handle=config['generator']['samples_per_handle'],
         buffer=True,
         seed=13)
     train_generator.augmentator = ImageDataAugmentation(
@@ -253,7 +254,16 @@ if __name__ == '__main__':
     logger.info('Job/Task ID: {}/{}'.format(
         os.environ.get('JOB_ID'), os.environ.get('SGE_TASK_ID')))
 
+    taskId = None
+    if len(sys.argv) >= 2:
+        if sys.argv[1] == '--show':
+            for idx in range(100):
+                print(get_config(idx)['model_name'])
+            exit()
+        else:
+            taskId = int(sys.argv[1])
+
     try:
-        process()
+        process(taskId)
     except Exception as err:
         logger.error(str(err), exc_info=True)
