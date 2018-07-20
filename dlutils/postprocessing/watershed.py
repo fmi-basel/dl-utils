@@ -11,7 +11,7 @@ import numpy as np
 
 
 def segment_nuclei(cell_pred, border_pred, threshold, upper_threshold=None,
-                   smoothness=5, obj_size=11, watershed_line=True):
+                   smoothness=5, obj_size=11, watershed_line=True, **kwargs):
     '''watershed based segmentation of nuclei.
 
     '''
@@ -38,5 +38,6 @@ def segment_nuclei(cell_pred, border_pred, threshold, upper_threshold=None,
         -combined,
         markers=markers,
         mask=cell_pred > threshold,
-        watershed_line=watershed_line)
+        watershed_line=watershed_line,
+        **kwargs)
     return segmentation
