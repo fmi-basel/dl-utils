@@ -5,6 +5,8 @@ from itertools import product
 
 import numpy as np
 import pytest
+import os
+import tempfile
 
 
 @pytest.yield_fixture(autouse=True)
@@ -59,6 +61,26 @@ def test_resnext_setup(input_shape, n_levels, width, n_blocks):
         assert all(x == y for x, y in zip(pred.shape[:-1], img.shape))
 
 
+def test_saving():
+    '''
+    '''
+    model_path = os.path.join(tempfile.gettempdir(), 'resnext-unittest.h5')
+    model = ResneXtBase(
+        input_shape=(300, 300, 3),
+        dropout=0.05,
+        n_levels=5,
+        width=1,
+        n_blocks=5,
+        cardinality=32)
+    model.compile('sgd', loss='mae')
+    model.summary()
+    model.save(model_path)
 
+    with open('/tmp/model.yaml', 'w') as fout:
+        fout.write(model.to_yaml())
+    print('success!')
+
+        
 if __name__ == '__main__':
-    test_resnext_setup((303, 301, 1), 4, 1, 3)
+    # test_resnext_setup((303, 301, 1), 4, 1, 3)
+    test_saving()
