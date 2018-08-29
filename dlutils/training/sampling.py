@@ -49,7 +49,7 @@ def get_random_patch(channels, patch_size, augmentator=None):
 
     # sample from all channels
     patch_coord = get_random_patch_corner(channels[0].shape, patch_size)
-    slices = [slice(x, x + dx) for x, dx in zip(patch_coord, patch_size)]
+    slices = tuple(slice(x, x + dx) for x, dx in zip(patch_coord, patch_size))
     patches = [channel[slices] for channel in channels]
 
     # # post-sampling augmentations

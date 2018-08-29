@@ -2,11 +2,17 @@ from keras.models import load_model as keras_load_model
 from keras.models import model_from_yaml, model_from_json
 
 from dlutils.layers.grouped_conv import GroupedConv2D
+from dlutils.layers.dilated_conv import DilatedConv2D
+from dlutils.layers.upsampling import BilinearUpSampling2D
 
 import os
 import logging
 
-CUSTOM_LAYERS = {'GroupedConv2D': GroupedConv2D}
+CUSTOM_LAYERS = {
+    'GroupedConv2D': GroupedConv2D,
+    'DilatedConv2D': DilatedConv2D,
+    'BilinearUpSampling2D': BilinearUpSampling2D
+}
 
 
 def load_model(file_path, *args, **kwargs):

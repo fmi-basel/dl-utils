@@ -10,7 +10,6 @@ from keras import backend as K
 
 
 class DilatedConv2D(KerasConvBase):
-
     def __init__(self,
                  filters,
                  kernel_size,
@@ -28,6 +27,8 @@ class DilatedConv2D(KerasConvBase):
                  kernel_constraint=None,
                  bias_constraint=None,
                  **kwargs):
+        if 'rank' in kwargs.keys():
+            kwargs.pop('rank')
         super(DilatedConv2D, self).__init__(
             rank=2,
             filters=filters,
@@ -48,19 +49,27 @@ class DilatedConv2D(KerasConvBase):
             **kwargs)
 
     def call(self, inputs):
+        '''
             '''
-            '''
-            output = tf.nn.atrous_conv2d(
-                inputs,
-                self.kernel,
-                #strides=(1, ) + self.strides + (1, ),
-                padding=self.padding.upper(),
-                rate=self.dilation_rate)
+        output = tf.nn.atrous_conv2d(
+            inputs,
+            self.kernel,
+            #strides=(1, ) + self.strides + (1, ),
+            padding=self.padding.upper(),
+            rate=self.dilation_rate)
 
-            if self.use_bias:
-                output = K.bias_add(
-                    output, self.bias, data_format=self.data_format)
+        if self.use_bias:
+            output = K.bias_add(
+                output, self.bias, data_format=self.data_format)
 
-            if self.activation is not None:
-                return self.activation(output)
-            return output
+        if self.activation is not None:
+            return self.activation(output)
+        return output
+
+    def get_config(self):
+        '''
+        '''
+        config = super(DilatedConv2D, self).get_config()
+        config.pop('rank')
+        config.pop('data_format')
+        return config

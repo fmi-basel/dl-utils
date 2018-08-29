@@ -164,11 +164,11 @@ def test_generator_completeness(n_handles=10):
         handles=handles, buffer=True, patch_size=(3, 3), batch_size=1)
     for epoch in range(5):
         vals = []
-        for batch in generator:
+        for ii, batch in enumerate(generator):
             assert batch[0]['input'].min() == batch[0]['input'].max()
             vals.append(batch[0]['input'].min())
         generator.on_epoch_end()
-        assert sorted(vals) == range(n_handles)
+        assert sorted(vals) == list(range(n_handles))
 
 
 if __name__ == '__main__':

@@ -13,7 +13,8 @@ def segment_nuclei(nuclei_pred,
                    upper_threshold=None,
                    smoothness=1,
                    watershed_line=True,
-                   spacing=None):
+                   spacing=None,
+                   return_numpy=True):
     '''watershed based segmentation of nuclei.
 
     '''
@@ -21,20 +22,22 @@ def segment_nuclei(nuclei_pred,
         if spacing is None:
             raise ValueError('spacing=None is not allowed when nuclei_pred is '
                              'not an itk::Image object')
-        nuclei_pred = itk.GetImageFromArray(nuclei_pred)
+        nuclei_pred = itk.Cast(
+            itk.GetImageFromArray(nuclei_pred), itk.sitkFloat32)
         nuclei_pred.SetSpacing(spacing)
 
     if isinstance(border_pred, np.ndarray):
         if spacing is None:
             raise ValueError('spacing=None is not allowed when border_pred is '
                              'not an itk::Image object')
-        border_pred = itk.GetImageFromArray(border_pred)
+        border_pred = itk.Cast(
+            itk.GetImageFromArray(border_pred), itk.sitkFloat32)
         border_pred.SetSpacing(spacing)
 
     # NOTE this is slightly different from the scipy version:
     # we smooth only the nuclei_pred
-    combined = itk.SmoothingRecursiveGaussian(nuclei_pred, smoothness,
-                                              True) * (1 - border_pred)
+    combined = itk.SmoothingRecursiveGaussian(nuclei_pred, smoothness, True)
+    combined = combined * (1.0 - border_pred)
 
     # maxima are going to be the seeds.
     maxima = itk.Cast(
@@ -48,4 +51,8 @@ def segment_nuclei(nuclei_pred,
 
     ws = itk.MorphologicalWatershedFromMarkers(
         -combined, markers, markWatershedLine=True, fullyConnected=True)
-    return itk.Mask(ws, itk.Cast(nuclei_pred >= threshold, ws.GetPixelID()))
+    segmentation = itk.Mask(
+        ws, itk.Cast(nuclei_pred >= threshold, ws.GetPixelID()))
+    if return_numpy:
+        return itk.GetArrayFromImage(segmentation)
+    return segmentation

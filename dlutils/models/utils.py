@@ -2,9 +2,6 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
-from keras.layers import Convolution2D
-from keras.engine import Model
-
 
 def get_model_name(name, **kwargs):
     '''generate a model name describing the architecture.
@@ -21,36 +18,6 @@ def get_model_name(name, **kwargs):
         return resnext_name(**kwargs)
     else:
         raise NotImplementedError('Model {} not known!'.format(name))
-
-
-def add_fcn_output_layers(model,
-                          names,
-                          n_classes,
-                          activation='sigmoid',
-                          kernel_size=1):
-    '''attaches fully-convolutional output layers to the
-    last layer of the given model.
-
-    '''
-    last_layer = model.layers[-1].output
-
-    if isinstance(names, list) and isinstance(n_classes, list):
-        assert len(names) == len(n_classes)
-    if not isinstance(activation, list):
-        activation = len(names) * [
-            activation,
-        ]
-    # TODO handle other cases
-
-    outputs = []
-    for name, classes, act in zip(names, n_classes, activation):
-        outputs.append(
-            Convolution2D(
-                classes, kernel_size=kernel_size, name=name,
-                activation=act,
-                padding='same')(last_layer))
-    model = Model(model.inputs, outputs, name=model.name)
-    return model
 
 
 def get_crop_shape(x_shape, y_shape):

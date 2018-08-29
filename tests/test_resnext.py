@@ -1,5 +1,5 @@
 from dlutils.models.resnext import ResneXtBase
-from dlutils.models.utils import add_fcn_output_layers
+from dlutils.models.heads import add_fcn_output_layers
 
 from itertools import product
 
