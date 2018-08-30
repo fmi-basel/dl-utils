@@ -117,7 +117,8 @@ class TrainingGenerator(Sequence):
 
         # indexing wraps around to support batches of larger size than
         # len(handles) when samples_per_handle > 1
-        for handle in (self.handles[(idx % len(self.handles) + ii) % len(
+        base_idx = (idx * self.batch_size) % len(self.handles)
+        for handle in (self.handles[(base_idx + ii) % len(
                 self.handles)] for ii in range(self.batch_size)):
             handle.load()  # make sure data is available.
             patches = handle.get_random_patch(self.patch_size,

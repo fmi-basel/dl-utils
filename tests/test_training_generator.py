@@ -148,7 +148,16 @@ def test_generator_with_augmentation(n_handles=5,
                     key, val.shape, expected_shape))
 
 
-def test_generator_completeness(n_handles=10):
+@pytest.mark.parametrize("n_handles,batch_size,samples_per_handle", [
+    (13, 1, 1),
+    (8, 2, 1),
+    (12, 3, 1),
+    (16, 4, 1),
+    (13, 5, 5),
+    (8, 2, 3),
+    (12, 6, 7),
+])
+def test_generator_completeness(n_handles, batch_size, samples_per_handle):
     '''
     '''
     img_shape = (10, 10)
@@ -160,16 +169,23 @@ def test_generator_completeness(n_handles=10):
         handle.load()
         handle['input'] = np.ones(img_shape + (n_channels, )) * counter
 
+    expected = sorted(list(range(n_handles)) * samples_per_handle)
+
     generator = TrainingGenerator(
-        handles=handles, buffer=True, patch_size=(3, 3), batch_size=1)
+        handles=handles,
+        buffer=True,
+        patch_size=(1, 1),
+        batch_size=batch_size,
+        samples_per_handle=samples_per_handle)
     for epoch in range(5):
         vals = []
         for ii, batch in enumerate(generator):
-            assert batch[0]['input'].min() == batch[0]['input'].max()
-            vals.append(batch[0]['input'].min())
+            for jj in range(batch_size):
+                vals.append(batch[0]['input'][jj].min())
         generator.on_epoch_end()
-        assert sorted(vals) == list(range(n_handles))
+        assert sorted(vals) == expected
 
 
 if __name__ == '__main__':
-    test_generator_completeness(n_handles=10)
+    test_generator_completeness(
+        n_handles=10, batch_size=2, samples_per_handle=1)
