@@ -119,26 +119,26 @@ def predict_complete(model, image, batch_size=None, patch_size=None,
 
         # re-assemble
         for idx, coord in enumerate(coord_batch):
-            slices = [
+            slices = tuple([
                 slice(x + border, x + dx - border)
                 for x, dx in zip(coord, patch_size)
-            ]
+            ])
 
             for key, pred in zip(model.output_names, pred_batch):
 
-                border_slices = [
+                border_slices = tuple([
                     slice(border, -border) for _ in range(pred[idx].ndim - 1)
-                ]
+                ])
 
                 # TODO implement smooth stitching.
                 responses[key][slices] = pred[idx][border_slices]
 
     if border > 0 or any(np.asarray(diff_shape) > 0):
 
-        slices = [
+        slices = tuple([
             slice(border + dx // 2, -(border + dx // 2 + dx % 2))
             for dx in diff_shape
-        ]
+        ])
 
         for key, val in responses.items():
             responses[key] = val[slices]
