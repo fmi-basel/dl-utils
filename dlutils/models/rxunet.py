@@ -163,7 +163,8 @@ def unet_block(base_features, n_levels, n_blocks_per_level, cardinality,
     return block
 
 
-def get_model_name(width, cardinality, n_levels, n_blocks, dropout, with_bn):
+def get_model_name(width, cardinality, n_levels, n_blocks, dropout, with_bn,
+                   **kwargs):
     '''
     '''
     name = 'RxUnet-W{}-C{}-L{}-B{}'.format(width, cardinality, n_levels,

@@ -4,6 +4,7 @@ from keras.models import model_from_yaml, model_from_json
 from dlutils.layers.grouped_conv import GroupedConv2D
 from dlutils.layers.dilated_conv import DilatedConv2D
 from dlutils.layers.upsampling import BilinearUpSampling2D
+from dlutils.layers.padding import DynamicPaddingLayer, DynamicTrimmingLayer
 
 import os
 import logging
@@ -11,7 +12,9 @@ import logging
 CUSTOM_LAYERS = {
     'GroupedConv2D': GroupedConv2D,
     'DilatedConv2D': DilatedConv2D,
-    'BilinearUpSampling2D': BilinearUpSampling2D
+    'BilinearUpSampling2D': BilinearUpSampling2D,
+    'DynamicPaddingLayer': DynamicPaddingLayer,
+    'DynamicTrimmingLayer': DynamicTrimmingLayer
 }
 
 
