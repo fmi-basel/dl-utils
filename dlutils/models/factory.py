@@ -14,5 +14,8 @@ def construct_base_model(name, **model_params):
     elif name == 'resnext':
         from dlutils.models.resnext import ResneXtBase
         return ResneXtBase(**model_params)
+    elif name == 'rxunet':
+        from dlutils.models.rxunet import GenericRxUnetBase
+        return GenericRxUnetBase(**model_params)
     else:
         raise NotImplementedError('Model {} not known!'.format(name))
