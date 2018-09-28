@@ -81,7 +81,7 @@ def predict_complete(model, image, batch_size=None, patch_size=None,
     # check if the patch_size fits within image.shape
     diff_shape = [max(x - y, 0) for x, y in zip(patch_size, image.shape)]
 
-    if border > 0 or any(diff_shape > 0):
+    if border > 0 or any(val > 0 for val in diff_shape):
         pad_width = [(
             border + dx // 2,
             border + dx // 2 + dx % 2,
@@ -89,6 +89,13 @@ def predict_complete(model, image, batch_size=None, patch_size=None,
             (0, 0),
         ]
         image = np.pad(image, pad_width=pad_width, mode='symmetric')
+
+    if all(x == y for (x, y) in zip(image.shape, patch_size)):
+        pred = dict(zip(model.output_names,
+                        model.predict(image[None, ...])))
+        for key, val in pred.items():
+            pred[key] = val.squeeze(axis=0)
+        return pred
 
     # predict on each patch.
     # TODO consider stitching and prediction concurrently.
