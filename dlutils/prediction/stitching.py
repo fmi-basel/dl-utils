@@ -38,8 +38,8 @@ class StitchingGenerator(Sequence):
             raise IndexError('idx {} out of range {}'.format(idx, len(self)))
         batch_end = min((idx + 1) * self.batch_size, len(self.corners))
         coord_batch, img_batch = list(
-            zip(*[((i, j), self.image[i:i + self.patch_size[0], j:
-                                      j + self.patch_size[1], ...])
+            zip(*[((i, j), self.image[i:i + self.patch_size[0], j:j +
+                                      self.patch_size[1], ...])
                   for i, j in self.corners[idx * self.batch_size:batch_end]]))
 
         return dict(input=np.asarray(img_batch), coord=np.asarray(coord_batch))
@@ -56,6 +56,8 @@ class StitchingGenerator(Sequence):
         x.append(self.image.shape[0] - self.patch_size[0])
         y.append(self.image.shape[1] - self.patch_size[1])
         self.corners = [(i, j) for i in x for j in y]
+
+
 
 
 def predict_complete(model, image, batch_size=None, patch_size=None,
@@ -78,6 +80,16 @@ def predict_complete(model, image, batch_size=None, patch_size=None,
     if n_channels == 1 and image.shape[-1] != 1:
         image = image[..., None]
 
+    # predict complete image at once.
+    if all(y is None or x == y for (x, y) in zip(image.shape, patch_size)):
+        if len(model.output_names) == 1:
+            return {model.output_names[0]: model.predict(image[None, ...])}
+
+        pred = dict(zip(model.output_names, model.predict(image[None, ...])))
+        for key, val in pred.items():
+            pred[key] = val.squeeze(axis=0)
+        return pred
+
     # check if the patch_size fits within image.shape
     diff_shape = [max(x - y, 0) for x, y in zip(patch_size, image.shape)]
 
@@ -89,13 +101,6 @@ def predict_complete(model, image, batch_size=None, patch_size=None,
             (0, 0),
         ]
         image = np.pad(image, pad_width=pad_width, mode='symmetric')
-
-    if all(x == y for (x, y) in zip(image.shape, patch_size)):
-        pred = dict(zip(model.output_names,
-                        model.predict(image[None, ...])))
-        for key, val in pred.items():
-            pred[key] = val.squeeze(axis=0)
-        return pred
 
     # predict on each patch.
     # TODO consider stitching and prediction concurrently.
