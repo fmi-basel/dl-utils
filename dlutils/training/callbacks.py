@@ -48,7 +48,8 @@ def create_callbacks(outdir,
                      epochs,
                      lr_min=None,
                      n_restarts=None,
-                     restart_decay=1.0):
+                     restart_decay=1.0,
+                     debug=False):
     '''Add basic callbacks for training.
 
     - ModelConfigSaver for architecture and final weights.
@@ -88,8 +89,8 @@ def create_callbacks(outdir,
             os.path.join(outdir, 'tensorboard-logs'),
             write_graph=True,
             write_grads=False,
-            write_images=False,
-            histogram_freq=0))
+            write_images=debug,
+            histogram_freq=1 if debug else 0))
     callbacks.append(
         LearningRateScheduler(
             CosineAnnealingSchedule(

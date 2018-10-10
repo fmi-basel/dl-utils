@@ -16,6 +16,10 @@ def get_model_name(name, **kwargs):
     elif name == 'resnext':
         from dlutils.models.resnext import get_model_name as resnext_name
         return resnext_name(**kwargs)
+    elif name == 'rxunet':
+        from dlutils.models.rxunet import get_model_name as rxunet_name
+        return rxunet_name(**kwargs)
+
     else:
         raise NotImplementedError('Model {} not known!'.format(name))
 
