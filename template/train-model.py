@@ -1,25 +1,24 @@
-from __future__ import division
 from __future__ import print_function
 from __future__ import absolute_import
+from __future__ import division
 
-from dataset import collect_handles
-
-from dlutils.models.factory import construct_base_model, get_model_name
-from dlutils.models.utils import add_fcn_output_layers
-from dlutils.training.lr_finder import lr_finder
-from dlutils.training.generator import TrainingGenerator
-from dlutils.training.augmentations import ImageDataAugmentation
-from dlutils.training.callbacks import create_callbacks
-
-from keras.optimizers import Adam, SGD
-from keras.backend import clear_session
-from scipy.stats import norm as gaussian_dist
-from scipy.stats import uniform as uniform_dist
-
-import numpy as np
+import argparse
 import logging
 import os
+from glob import glob
 
+from simpledl.config import read_config, Config
+from simpledl.dataset import prepare_dataset
+from simpledl.training import train
+
+from dlutils.utils import set_seeds
+from dlutils.models.factory import construct_base_model
+from dlutils.models.heads import add_fcn_output_layers
+
+from keras.optimizers import Adam
+
+# general setup
+# logging
 logging.basicConfig(
     level=logging.INFO,
     format='[%(asctime)s] (%(name)s) [%(levelname)s]: %(message)s',
@@ -28,242 +27,155 @@ logging.basicConfig(
 # reduce tf-clutter output.
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
 
-# TODO consider moving the basedir to dataset.
-basedir = ''  # TODO fill out.
+# seeds
+set_seeds()
+
+# Define problem specific settings
+SETTINGS = {
+    'training': {
+        'epochs': 100,
+        'steps_per_epoch': None,
+        'learning_rate': None,
+        'use_multiprocessing': False,
+        'workers': 4
+    },
+    'dataset': {
+        'patch_size': (290, 290),
+        #        'task_type': 'instance_segmentation',
+        'task_type': 'binary_segmentation',
+        'batch_size': 4,
+    },
+    'augmentation': None,
+    'model': {
+        'model_name': 'rxunet',
+        'n_levels': 4,
+        'width': 1,
+        'cardinality': 8,
+        'n_blocks': 2,
+        'input_shape': (None, None, 1),
+        'dropout': 0.,
+    }
+}
 
 
-def construct_model(model_name, batch_size, input_shape, learning_rate,
-                    pred_names, classes_per_output, optimizer, **model_params):
+def collect_data(input_dir, target_dir, pattern='*.tif'):
+    '''gathers data for training from two folders. Assumes that
+    the matching pairs have the same name.
+
     '''
+    input_paths = sorted(glob(os.path.join(input_dir, pattern)))
 
-    TODO add basemodel constructor as function argument
+    path_pairs = [(input_path, target_path) for input_path, target_path in (
+        (path, os.path.join(target_dir, os.path.basename(path)))
+        for path in input_paths) if os.path.exists(target_path)]
+    return path_pairs
+
+
+def get_model(model_name, input_shape, task_type, **model_kwargs):
+    '''returns a model constructor function.
+
     '''
-    raise NotImplementedError('Adjust model construction for given task')
-    model = construct_base_model(
-        model_name, input_shape=input_shape, **model_params)
-    model = add_fcn_output_layers(model, pred_names, classes_per_output)
+    if task_type == 'instance_segmentation':
+        loss = {
+            'fg_pred': 'binary_crossentropy',
+            'separator_pred': 'mean_absolute_error'
+        }
+        pred_names = list(loss.keys())
+        classes_per_output = [1, 1]
+    elif task_type == 'binary_segmentation':
+        loss = {'fg_pred': 'binary_crossentropy'}
+        pred_names = list(loss.keys())
+        classes_per_output = [1]
+    else:
+        raise ValueError('Unknown task type: {}'.format(task_type))
 
-    if 'sgd' in optimizer:
-        optimizer = SGD(lr=learning_rate, momentum=0.9)
-    elif 'adam' in optimizer:
+    def model_constructor():
+        '''
+        '''
+        # get base model.
+        model = construct_base_model(
+            model_name, input_shape=input_shape, **model_kwargs)
+
+        # and add desired heads.
+        model = add_fcn_output_layers(model, pred_names, classes_per_output)
+
         optimizer = Adam(
-            lr=learning_rate,
+            lr=0.001,  # NOTE LR will be overwritten by the callback.
             beta_1=0.9,
             beta_2=0.999,
             epsilon=1e-8,
             decay=0.0)
-    model.compile(
-        optimizer=optimizer,
-        loss={
-            'cell_pred': 'binary_crossentropy',
-            'border_pred': 'mean_absolute_error'
-        },
-    )
+        model.compile(
+            optimizer=optimizer,
+            loss=loss,
+        )
+        logger = logging.getLogger(__name__)
+        logger.info('Compiled model: {}'.format(model.name))
+        return model
 
-    logger.info('Compiled model: {}'.format(model.name))
-    return model
+    return model_constructor
 
 
-def get_zero_based_task_id():
+def parse():
+    '''parse command line arguments.
+
+    '''
+    logger = logging.getLogger('parse')
+
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        '--config',
+        help='config to load [.yaml]',
+        required=False,
+        default=None)
+    parser.add_argument(
+        '--dataset_input', help='directory with input data', required=True)
+    parser.add_argument(
+        '--dataset_target',
+        help='directory with target data (ground truth)',
+        required=True)
+    parser.add_argument(
+        '--output', help='directory to save trained model', required=True)
+
+    args = parser.parse_args()
+    logger.debug('Parsed arguments:')
+    logger.debug('  config=%s', args.config)
+    logger.debug('  dataset=(%s, %s)', args.dataset_input, args.dataset_target)
+    logger.debug('  output=%s', args.output)
+    return args
+
+
+def main():
     '''
     '''
-    sge_id = os.environ.get('SGE_TASK_ID', None)
-    if sge_id is None:
-        return 0
-    else:
-        return int(sge_id) - 1
+    logger = logging.getLogger('main')
 
+    try:
+        args = parse()
 
-def get_base_config():
-    '''
-    '''
-    config = dict(
-        training=dict(
-            epochs=200,
-            initial_epoch=0,
-            use_multiprocessing=False,
-            workers=4,  # evil
-            max_queue_size=32,
-            verbose=2),
-        optimizer=dict(name='adam'),
-        generator=dict(samples_per_handle=1),
-        augmentation=dict(
-            intensity_shift=gaussian_dist(loc=0, scale=.3),
-            intensity_scaling=gaussian_dist(loc=1, scale=0.1),
-            intensity_swap=False,
-            flip=True,
-            rotation=uniform_dist(-10., 20),
-            shear=gaussian_dist(loc=0, scale=10.),
-            zoom=uniform_dist(0.95, 0.075)),
-        model=dict(batch_size=8),
-        lr_schedule=dict(lr_min=1e-7, restart_decay=1., n_restarts=1),
-    )
+        # load config and set preliminary path.
+        config = Config(**SETTINGS) if args.config is None else read_config(
+            args.config)
+        config.path = os.path.join(args.output, 'config.yaml')
 
-    return config
+        with config:
+            dataset = prepare_dataset(
+                collect_data(args.dataset_input, args.dataset_target),
+                augmentation_params=config['augmentation'],
+                **config['dataset'])
+            model_constructor = get_model(
+                task_type=config['dataset']['task_type'], **config['model'])
+            train(
+                dataset,
+                model_constructor,
+                outdir=args.output,
+                **config['training'])
 
-
-def get_config(taskId):
-    '''generate config based on the current task id.
-    '''
-    config = get_base_config()
-
-    from sklearn.model_selection import ParameterGrid
-    grid = ParameterGrid({
-        'model/n_levels': [5],
-        'model/dropout': [
-            0.0,
-            0.05,
-        ],
-        'model/cardinality': [1, 1.5]
-    }, )
-
-    # update base config with specific config.
-    for key, val in list(grid[taskId].items()):
-
-        # get the nested dict
-        split_keys = key.split('/')
-        if len(split_keys) == 1:
-            config[key] = val
-        else:
-            handle = config
-            for subkey in split_keys[:-1]:
-                handle = handle[subkey]
-            handle[split_keys[-1]] = val
-
-    # update some of the config based on the particular setting.
-    config['model_name'] = get_model_name(
-        dropout_rate=config['model']['dropout'], **config['model'])
-
-    return config
-
-
-def process(taskId=None):
-    '''
-    '''
-    logger = logging.getLogger(__name__)
-
-    config = get_config(get_zero_based_task_id())
-
-    # log config
-    for key, val in list(config.items()):
-        if isinstance(val, dict):
-            logger.info('{}:'.format(key))
-            for subkey, subval in list(val.items()):
-                logger.info('  {:30}: {}'.format(subkey, subval))
-        else:
-            logger.info('{:30}: {}'.format(key, val))
-
-    # TODO save full training config in folder.
-
-    # TODO customize
-    outdir = './{}/{}/{}'.format(
-        config['base_model'], config['model_name'], config['optimizer']['name']
-        + ('-R' if config['lr_schedule']['n_restarts'] > 1 else ''))
-    if not os.path.exists(outdir):
-        os.makedirs(outdir)
-
-    # TODO customize
-    # TODO consider moving the output definition to dataset.
-    input_shape = (300, 300, 3)
-    pred_names = ['cell_pred', 'border_pred']
-    classes_per_output = [1, 1]
-
-    # collect image handles with training annotation.
-    train_handles, val_handles = collect_handles(basedir)
-    logger.info('Training images: {}'.format(len(train_handles)))
-    logger.info('Validation images: {}'.format(len(val_handles)))
-    for handle in val_handles:
-        logger.debug('	{}'.format(handle['img_path']))
-
-    train_generator = TrainingGenerator(
-        train_handles,
-        patch_size=input_shape[:-1],
-        batch_size=config['model']['batch_size'],
-        samples_per_handle=config['generator']['samples_per_handle'],
-        buffer=True,
-        seed=13)
-    train_generator.augmentator = ImageDataAugmentation(
-        **config['augmentation'])
-
-    val_generator = TrainingGenerator(
-        val_handles,
-        patch_size=input_shape[:-1],
-        batch_size=config['model']['batch_size'],
-        buffer=True,
-        samples_per_handle=1,
-        seed=13)
-
-    # TODO move this to a separate function.
-    model = construct_model(
-        config['base_model'],
-        input_shape=input_shape,
-        learning_rate=1e-4,
-        pred_names=pred_names,
-        classes_per_output=classes_per_output,
-        optimizer=config['optimizer']['name'],
-        **config['model'])
-
-    lrf = lr_finder(
-        model,
-        train_generator,
-        steps=100,
-        base_lr=1e-6,
-        max_lr=1.0,
-        verbose=2,
-        workers=config['training']['workers'],
-        max_queue_size=config['training']['max_queue_size'],
-        use_multiprocessing=True)
-    suggested_lr = lrf.suggest_lr(sigma=5.)
-    logger.info('Suggested learning rate: {}'.format(suggested_lr))
-
-    clear_session()
-
-    model = construct_model(
-        config['base_model'],
-        input_shape=input_shape,
-        learning_rate=suggested_lr,
-        pred_names=pred_names,
-        classes_per_output=classes_per_output,
-        optimizer=config['optimizer']['name'],
-        **config['model'])
-
-    callbacks = create_callbacks(
-        lr=suggested_lr,
-        outdir=outdir,
-        nth_checkpoint=1000,  # dont checkpoint models
-        epochs=config['training']['epochs'],
-        **config['lr_schedule'])
-
-    # TODO implement deterministic validation split
-    np.random.seed(42)  # reset seed to improve reproducibility.
-    model.fit_generator(
-        train_generator,
-        steps_per_epoch=len(train_generator),
-        callbacks=callbacks,
-        validation_data=val_generator,
-        validation_steps=len(val_generator),
-        **config['training'])
+    except Exception as err:
+        logger.error('Error: %s', str(err), exc_info=True)
+        return 1
+    return 0
 
 
 if __name__ == '__main__':
-    logger = logging.getLogger(__name__)
-
-    logger.debug('Starting')
-    logger.info('Host: {}'.format(os.environ.get('HOST')))
-    logger.info('GPU cores: {}'.format(os.environ.get('CUDA_VISIBLE_DEVICES')))
-    logger.info('Job/Task ID: {}/{}'.format(
-        os.environ.get('JOB_ID'), os.environ.get('SGE_TASK_ID')))
-
-    taskId = None
-    if len(sys.argv) >= 2:
-        if sys.argv[1] == '--show':
-            for idx in range(100):
-                print(get_config(idx)['model_name'])
-            exit()
-        else:
-            taskId = int(sys.argv[1])
-
-    try:
-        process(taskId)
-    except Exception as err:
-        logger.error(str(err), exc_info=True)
+    main()
