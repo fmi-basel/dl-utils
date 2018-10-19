@@ -55,6 +55,13 @@ class LazyTrainingHandle(dict):
         for key in self.get_input_keys() + self.get_output_keys():
             self[key] = None
 
+    def is_loaded(self):
+        '''
+        '''
+        return all(
+            self.get(key, None) is not None
+            for key in self.get_input_keys() + self.get_output_keys())
+
 
 class TrainingGenerator(Sequence):
     '''generates random patches from a set of training images and

@@ -11,6 +11,7 @@ from dlutils.training.generator import LazyTrainingHandle
 from dlutils.preprocessing.normalization import standardize
 from dlutils.training.augmentations import ImageDataAugmentation
 from dlutils.training.generator import TrainingGenerator
+from dlutils.training.targets import generate_separator_map
 
 from skimage.external.tifffile import imread
 
@@ -58,7 +59,7 @@ class BinarySegmentationHandle(LazyTrainingHandle):
         self['input'] = imread(self['img_path'])
         self['input'] = standardize(
             self['input'],
-            min_scale=10)  # NOTE consider adjusting min_scale to your dataset
+            min_scale=50)  # NOTE consider adjusting min_scale to your dataset
 
         # load segmentation and make sure it's binary
         self['fg_pred'] = imread(self['segm_path']) >= 1
@@ -68,19 +69,43 @@ class BinarySegmentationHandle(LazyTrainingHandle):
             if self[key].ndim == len(self.patch_size):
                 self[key] = self[key][..., None]
 
-    def clear(self):
-        '''discard loaded data.
+
+class InstanceSegmentationHandleWithSeparator(LazyTrainingHandle):
+    def get_input_keys(self):
+        '''returns a list of input keys.
 
         '''
-        for key in self.get_input_keys() + self.get_output_keys():
-            self[key] = None
+        return ['input']
 
-    def is_loaded(self):
+    def get_output_keys(self):
+        '''returns a list of output keys.
+
+        '''
+        return ['fg_pred', 'separator_pred']
+
+    def __init__(self, img_path, segm_path, patch_size):
+        '''initializes handle with source paths and patch_size for sampling.
+
+        '''
+        self['img_path'] = img_path
+        self['segm_path'] = segm_path
+        self.patch_size = patch_size
+
+    def load(self):
         '''
         '''
-        return all(
-            self.get(key, None) is not None
-            for key in self.get_input_keys() + self.get_output_keys())
+        if self.is_loaded():
+            return
+
+        self['input'] = imread(self['img_path'])
+        self['input'] = standardize(self['input'], min_scale=50)
+
+        segm = imread(self['segm_path'])
+        self['fg_pred'] = segm >= 1
+        if segm.max() <= 0:
+            self['separator_pred'] = np.zeros_like(segm)
+        else:
+            self['separator_pred'] = generate_separator_map(segm, reach=15)
 
 
 def prepare_dataset(path_pairs,

@@ -13,6 +13,7 @@ def estimate_learning_rate(model_constructor, dataset):
     '''
     logger = logging.getLogger(__name__)
 
+    logger.info('Starting learning rate estimation')
     model = model_constructor()
     lrf = lr_finder(
         model,
@@ -20,7 +21,7 @@ def estimate_learning_rate(model_constructor, dataset):
         steps=100,
         base_lr=1e-6,
         max_lr=1.0,
-        verbose=2,
+        verbose=1,
     )
 
     learning_rate = lrf.suggest_lr(sigma=5.)
@@ -34,19 +35,20 @@ def train(dataset,
           model_constructor,
           outdir,
           learning_rate=None,
+          steps_per_epoch=None,
           **training_config):
     '''
     '''
     logger = logging.getLogger(__name__)
 
     if learning_rate is None:
-        logger.debug('Starting learning rate estimation')
         learning_rate = estimate_learning_rate(model_constructor,
                                                dataset['training'])
     logger.info('Using learning_rate={}'.format(learning_rate))
 
     # build model
     model = model_constructor()
+    model.summary()
     outdir = os.path.join(outdir, model.name)
 
     # setup callbacks
@@ -56,8 +58,14 @@ def train(dataset,
         nth_checkpoint=10000,  # dont checkpoint models
         epochs=training_config['epochs'])
 
+    if steps_per_epoch is None:
+        steps_per_epoch = len(dataset['training'])
+
     model.fit_generator(
         dataset['training'],
+        steps_per_epoch=steps_per_epoch,
         validation_data=dataset['validation'],
+        validation_steps=training_config.get('validation_steps',
+                                             len(dataset['validation'])),
         callbacks=callbacks,
         **training_config)
