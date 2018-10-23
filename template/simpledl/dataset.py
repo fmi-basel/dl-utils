@@ -108,6 +108,32 @@ class InstanceSegmentationHandleWithSeparator(LazyTrainingHandle):
             self['separator_pred'] = generate_separator_map(segm, reach=15)
 
 
+class InstanceSegmentationHandleWithSeparatorMultislice(
+        InstanceSegmentationHandleWithSeparator):
+    def load(self):
+        '''
+        '''
+        super(InstanceSegmentationHandleWithSeparatorMultislice, self).load()
+
+        # move Z axis to last position and
+        # we probably have to remove the flat dimension at the end.
+        for key in self.get_input_keys() + self.get_output_keys():
+            if self[key].shape[-1] == 1:
+                self[key] = np.squeeze(self[key], axis=-1)
+            self[key] = np.moveaxis(self[key], 0, -1)
+
+    def get_random_patch(self, patch_size, *args, **kwargs):
+        '''
+        '''
+        patches = super(InstanceSegmentationHandleWithSeparatorMultislice,
+                        self).get_random_patch(patch_size, *args, **kwargs)
+
+        # subselect middle plane of outputs
+        for key in self.get_output_keys():
+            patches[key] = patches[key][..., patch_size[-1] // 2][..., None]
+        return patches
+
+
 def prepare_dataset(path_pairs,
                     task_type,
                     patch_size,
