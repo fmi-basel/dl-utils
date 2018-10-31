@@ -16,7 +16,8 @@ setup(
     ]),
     install_requires=[
         'numpy', 'matplotlib', 'scipy', 'keras==2.0.8', 'opencv-python>=3.4',
-        'scikit-image>=0.13', 'scikit-learn', 'future', 'tqdm'
+        'scikit-image>=0.13', 'scikit-learn', 'future', 'tqdm',
+        'pyyaml', 'h5py'
     ],
     # I believe zipping makes the import rather slow.
     zip_safe=False)
