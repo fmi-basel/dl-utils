@@ -1,5 +1,6 @@
 from queue import Queue
 from threading import Thread
+from inspect import isgeneratorfunction
 import logging
 
 # sentinel used as stop signal.
@@ -21,12 +22,16 @@ def _preprocessor(out_queue, preprocessor_fn, vals):
 
     '''
     logging.getLogger(__name__).debug('Preprocessor starting')
-    debug = logging.getLogger(__name__).isEnabledFor(logging.DEBUG)
+
+    is_generator = isgeneratorfunction(preprocessor_fn)
     for val in vals:
-        if debug:
-            logging.getLogger(__name__).debug('Preprocessor handling val: %s',
-                                              str(val))
-        out_queue.put(preprocessor_fn(val))
+        if not isinstance(val, tuple):
+            val = (val,)
+        if is_generator:
+            for retval in preprocessor_fn(*val):
+                out_queue.put(retval)
+        else:
+            out_queue.put(preprocessor_fn(*val))
 
     # mark "end" for consumers.
     out_queue.put(_SENTINEL)
@@ -48,7 +53,7 @@ def _postprocessor(in_queue, postprocessor_fn):
             break
 
         if not isinstance(vals, tuple):
-            vals = tuple(vals)
+            vals = (vals,)
 
         postprocessor_fn(*vals)
         in_queue.task_done()
@@ -60,6 +65,8 @@ def _processor(in_queue, out_queue, processor_fn):
     '''
     '''
     logging.getLogger(__name__).debug('Processor starting')
+
+    is_generator = isgeneratorfunction(processor_fn)
     while True:
         vals = in_queue.get()
 
@@ -71,9 +78,13 @@ def _processor(in_queue, out_queue, processor_fn):
             break
 
         if not isinstance(vals, tuple):
-            vals = tuple(vals)
+            vals = (vals,)
 
-        out_queue.put(processor_fn(*vals))
+        if is_generator:
+            for retval in processor_fn(*vals):
+                out_queue.put(retval)
+        else:
+            out_queue.put(processor_fn(*vals))
         in_queue.task_done()
 
     logging.getLogger(__name__).debug('Processor exiting')
