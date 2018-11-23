@@ -1,10 +1,12 @@
 from dlutils.prediction.runner import runner
 
+import pytest
 import numpy as np
 
 
 def test_runner(n_vals=100):
     '''test runner with functions
+
     '''
 
     def generator_fn(val):
@@ -32,7 +34,8 @@ def test_runner(n_vals=100):
 
 
 def test_runner_from_generator(k_runs=5, n_vals=10):
-    '''test runner with generator functions
+    '''test runner with generators
+
     '''
 
     def generator_fn(val):
@@ -65,5 +68,38 @@ def test_runner_from_generator(k_runs=5, n_vals=10):
             assert False
 
 
+@pytest.mark.parametrize("prep_fails, processor_fails, post_fails",
+                         [[True, False, False], [False, True, False],
+                          [False, False, True], [False, False, False]])
+def test_exception_handling(prep_fails, processor_fails, post_fails):
+    '''test error handling
+
+    '''
+    n_vals = 100
+
+    class CustomException(Exception):
+        pass
+
+    def fail(val):
+        raise CustomException('')
+
+    def do_nothing(val):
+        return val
+
+    args = [
+        fail if prep_fails else do_nothing,
+        fail if processor_fails else do_nothing,
+        fail if post_fails else do_nothing,
+    ]
+
+    if prep_fails or processor_fails or post_fails:
+        with pytest.raises(CustomException):
+            runner(*args, range(n_vals))
+    else:
+        runner(*args, range(n_vals))
+
+
 if __name__ == '__main__':
-    test_runner(20)
+    import logging
+    logging.basicConfig(level=logging.DEBUG)
+    test_exception_handling(False, False, True)
