@@ -112,6 +112,12 @@ def runner(preprocessor_fn,
     queue_maxsize : int
         maximum queue size.
 
+    Notes
+    -----
+    Since this implementation uses ```threading.Thread```s, pre- and
+    postprocessor functions should be limited to I/O operations in order
+    to be efficient.
+
     '''
     assert queue_maxsize >= 1
     assert len(vals) >= 1
