@@ -2,9 +2,13 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
-from keras.callbacks import ModelCheckpoint, \
-        TensorBoard, CSVLogger, LearningRateScheduler, \
-        Callback
+from keras.callbacks import ModelCheckpoint
+from keras.callbacks import TensorBoard
+from keras.callbacks import CSVLogger
+from keras.callbacks import LearningRateScheduler
+from keras.callbacks import Callback
+from keras.callbacks import TerminateOnNaN
+
 from dlutils.training.scheduler import CosineAnnealingSchedule
 
 import os
@@ -57,7 +61,8 @@ def create_callbacks(outdir,
     - ModelCheckpoint for best val score.
     - CSVLogger for all metrics.
     - Tensorboard for model graph.
-    - Cosine annealing learning rate schedule
+    - Cosine annealing learning rate schedule.
+    - TerminateOnNaN
 
     '''
     if lr_min is None:
@@ -98,4 +103,5 @@ def create_callbacks(outdir,
                 lr_min=lr_min,
                 epoch_max=epochs_to_restart,
                 reset_decay=restart_decay)))
+    callbacks.append(TerminateOnNaN())
     return callbacks
