@@ -3,12 +3,14 @@ from __future__ import print_function
 from __future__ import absolute_import
 
 import logging
+import numpy as np
 
 from dlutils.training.generator import LazyTrainingHandle
 from dlutils.preprocessing.normalization import standardize
 from dlutils.training.augmentations import ImageDataAugmentation
 from dlutils.training.generator import TrainingGenerator
 from dlutils.training.split import split
+from dlutils.training.targets import generate_separator_map
 
 from skimage.external.tifffile import imread
 
@@ -43,7 +45,7 @@ class BinarySegmentationHandle(LazyTrainingHandle):
         self['input'] = imread(self['img_path'])
         self['input'] = standardize(
             self['input'],
-            min_scale=10)  # NOTE consider adjusting min_scale to your dataset
+            min_scale=50)  # NOTE consider adjusting min_scale to your dataset
 
         # load segmentation and make sure it's binary
         self['fg_pred'] = imread(self['segm_path']) >= 1
@@ -53,19 +55,69 @@ class BinarySegmentationHandle(LazyTrainingHandle):
             if self[key].ndim == len(self.patch_size):
                 self[key] = self[key][..., None]
 
-    def clear(self):
-        '''discard loaded data.
+
+class InstanceSegmentationHandleWithSeparator(LazyTrainingHandle):
+    def get_input_keys(self):
+        '''returns a list of input keys.
 
         '''
+        return ['input']
+
+    def get_output_keys(self):
+        '''returns a list of output keys.
+
+        '''
+        return ['fg_pred', 'separator_pred']
+
+    def __init__(self, img_path, segm_path, patch_size):
+        '''initializes handle with source paths and patch_size for sampling.
+
+        '''
+        self['img_path'] = img_path
+        self['segm_path'] = segm_path
+        self.patch_size = patch_size
+
+    def load(self):
+        '''
+        '''
+        if self.is_loaded():
+            return
+
+        self['input'] = imread(self['img_path'])
+        self['input'] = standardize(self['input'], min_scale=50)
+
+        segm = imread(self['segm_path'])
+        self['fg_pred'] = segm >= 1
+        if segm.max() <= 0:
+            self['separator_pred'] = np.zeros_like(segm)
+        else:
+            self['separator_pred'] = generate_separator_map(segm, reach=15)
+
+
+class InstanceSegmentationHandleWithSeparatorMultislice(
+        InstanceSegmentationHandleWithSeparator):
+    def load(self):
+        '''
+        '''
+        super(InstanceSegmentationHandleWithSeparatorMultislice, self).load()
+
+        # move Z axis to last position and
+        # we probably have to remove the flat dimension at the end.
         for key in self.get_input_keys() + self.get_output_keys():
-            self[key] = None
+            if self[key].shape[-1] == 1:
+                self[key] = np.squeeze(self[key], axis=-1)
+            self[key] = np.moveaxis(self[key], 0, -1)
 
-    def is_loaded(self):
+    def get_random_patch(self, patch_size, *args, **kwargs):
         '''
         '''
-        return all(
-            self.get(key, None) is not None
-            for key in self.get_input_keys() + self.get_output_keys())
+        patches = super(InstanceSegmentationHandleWithSeparatorMultislice,
+                        self).get_random_patch(patch_size, *args, **kwargs)
+
+        # subselect middle plane of outputs
+        for key in self.get_output_keys():
+            patches[key] = patches[key][..., patch_size[-1] // 2][..., None]
+        return patches
 
 
 def prepare_dataset(path_pairs,
