@@ -1,31 +1,16 @@
 from __future__ import division
 from __future__ import print_function
 from __future__ import absolute_import
-from builtins import zip
-from builtins import range
 
 import logging
-import numpy as np
 
 from dlutils.training.generator import LazyTrainingHandle
 from dlutils.preprocessing.normalization import standardize
 from dlutils.training.augmentations import ImageDataAugmentation
 from dlutils.training.generator import TrainingGenerator
+from dlutils.training.split import split
 
 from skimage.external.tifffile import imread
-
-
-def split(samples, ratio, seed=13):
-    '''split images into training and validation.
-
-    '''
-    assert 0 <= ratio <= 1.
-    # shuffle
-    if seed is not None:
-        np.random.seed(seed)
-    np.random.shuffle(samples)
-    split_idx = int((1. - ratio) * len(samples))
-    return samples[:split_idx], samples[split_idx:]
 
 
 class BinarySegmentationHandle(LazyTrainingHandle):
@@ -91,6 +76,13 @@ def prepare_dataset(path_pairs,
                     **config_params):
     '''create a generator for training samples and validation samples.
 
+    Parameters
+    ----------
+    path_pairs : list of tuples
+        list of pairs of (path_to_input_img, path_to_target_img) or
+        three-tuples of (path_to_input_img, path_to_target_img, category).
+        For the latter, the categories are used to stratify the training
+        and validation split.
     '''
     if task_type == 'binary_segmentation':
         Handle = BinarySegmentationHandle
@@ -99,15 +91,24 @@ def prepare_dataset(path_pairs,
     else:
         raise ValueError('Unknown task_type: {}'.format(task_type))
 
+    # prepare categories for split stratification if available.
+    if all(len(paths) == 3 for paths in path_pairs):
+        stratify = [label for _, _, label in path_pairs]
+        path_pairs = [(input_path, target_path)
+                      for input_path, target_path, _ in path_pairs]
+    else:
+        stratify = None
+
     train_handles, validation_handles = split(
         [Handle(*paths, patch_size=patch_size) for paths in path_pairs],
-        split_ratio)
+        split_ratio,
+        stratify=stratify)
 
     logger = logging.getLogger(__name__)
     logger.info('Training samples: %i', len(train_handles))
     logger.info('Validation samples: %i', len(validation_handles))
 
-    if config_params['buffer']:
+    if config_params.get('buffer', False):
         # preload.
         for handle in train_handles + validation_handles:
             handle.load()

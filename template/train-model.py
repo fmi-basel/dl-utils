@@ -65,6 +65,8 @@ def collect_data(input_dir, target_dir, pattern='*.tif'):
     '''
     input_paths = sorted(glob(os.path.join(input_dir, pattern)))
 
+    # NOTE if path_pairs are 3-tuples, then the last entry is used to stratify
+    # the training-validation split.
     path_pairs = [(input_path, target_path) for input_path, target_path in (
         (path, os.path.join(target_dir, os.path.basename(path)))
         for path in input_paths) if os.path.exists(target_path)]
