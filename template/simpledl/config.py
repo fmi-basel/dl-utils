@@ -59,6 +59,14 @@ def write_config(config, path):
     dirname = os.path.dirname(path)
     if not os.path.exists(dirname):
         os.makedirs(dirname)
+
+    # TODO consider handling this in a nicer fashion
+    if config.get('augmentation', None) is not None:
+        for key, val in config['augmentation'].items():
+            if isinstance(val, (bool, str, int, float)):
+                continue
+            config['augmentation'][key] = 'cant dump'
+
     yaml.safe_dump(
         {key: val
          for key, val in config.items()},
