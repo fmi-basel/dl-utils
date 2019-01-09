@@ -7,9 +7,9 @@ import logging
 import os
 from glob import glob
 
-from simpledl.config import read_config, Config
-from simpledl.dataset import prepare_dataset
-from simpledl.training import train
+from dlutils.training.config import read_config, Config
+from dlutils.training.dataset import prepare_dataset
+from dlutils.training.utils import train
 
 from dlutils.utils import set_seeds
 from dlutils.models.factory import construct_base_model
