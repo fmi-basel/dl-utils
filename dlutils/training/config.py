@@ -6,6 +6,8 @@ import yaml
 import os
 import logging
 
+import numpy as np
+
 from tempfile import mkstemp
 
 DEFAULT_CONFIG = {
@@ -60,12 +62,23 @@ def write_config(config, path):
     if not os.path.exists(dirname):
         os.makedirs(dirname)
 
-    # TODO consider handling this in a nicer fashion
-    if config.get('augmentation', None) is not None:
-        for key, val in config['augmentation'].items():
-            if isinstance(val, (bool, str, int, float)):
-                continue
-            config['augmentation'][key] = 'cant dump'
+    for key in config.keys():
+        for subkey, val in config[key].items():
+
+            print(subkey, val, type(val))
+
+            # dump numpy arrays as lists
+            if isinstance(val, np.ndarray):
+                config[key][subkey] = val.tolist()
+
+            elif isinstance(val, np.float64):
+                config[key][subkey] = float(val)
+
+            elif isinstance(val, (bool, str, int, float)):
+                pass
+
+            else:
+                config[key][subkey] = str(val)
 
     yaml.safe_dump(
         {key: val
