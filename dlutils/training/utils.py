@@ -69,3 +69,4 @@ def train(dataset,
                                              len(dataset['validation'])),
         callbacks=callbacks,
         **training_config)
+    return outdir
