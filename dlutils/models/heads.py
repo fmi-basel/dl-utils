@@ -1,4 +1,4 @@
-from keras.layers import Convolution2D
+from keras.layers import Conv2D, Conv3D
 from keras.engine import Model
 
 from dlutils.models.deeplab import aspp_block
@@ -15,6 +15,10 @@ def add_fcn_output_layers(model,
 
     '''
     last_layer = model.layers[-1].output
+    if len(last_layer.shape) == 5:
+        Conv = Conv3D
+    else:
+        Conv = Conv2D
 
     if isinstance(names, list) and isinstance(n_classes, list):
         assert len(names) == len(n_classes)
@@ -27,7 +31,7 @@ def add_fcn_output_layers(model,
     outputs = []
     for name, classes, act in zip(names, n_classes, activation):
         outputs.append(
-            Convolution2D(
+            Conv(
                 classes,
                 kernel_size=kernel_size,
                 name=name,
@@ -50,6 +54,10 @@ def add_aspp_output_layers(model,
 
     '''
     last_layer = model.layers[-1].output
+    if len(last_layer.shape) == 5:
+        Conv = Conv3D
+    else:
+        Conv = Conv2D
 
     if isinstance(names, list) and isinstance(n_classes, list):
         assert len(names) == len(n_classes)
@@ -66,7 +74,7 @@ def add_aspp_output_layers(model,
 
     outputs = []
     for name, classes, act in zip(names, n_classes, activation):
-        y = Convolution2D(
+        y = Conv(
             classes,
             kernel_size=1,
             name=name + '-low' if with_upscaling else name,

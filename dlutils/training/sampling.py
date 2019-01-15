@@ -46,7 +46,7 @@ def get_random_patch(channels, patch_size, augmentator=None):
     # TODO consider pre-sampling augmentations
     if augmentator is not None:
         pass
-
+        
     # sample from all channels
     patch_coord = get_random_patch_corner(channels[0].shape, patch_size)
     slices = tuple(slice(x, x + dx) for x, dx in zip(patch_coord, patch_size))
