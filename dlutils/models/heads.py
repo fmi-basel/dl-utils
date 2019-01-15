@@ -44,7 +44,8 @@ def add_aspp_output_layers(model,
                            rate=1,
                            n_levels=3,
                            activation='sigmoid',
-                           with_upscaling=False):
+                           with_upscaling=False,
+                           with_bn=False):
     '''attaches atrous spatial pyramid layers to the
     last layer of the given model.
 
@@ -57,10 +58,10 @@ def add_aspp_output_layers(model,
         activation = len(names) * [
             activation,
         ]
-    # TODO handle other cases
 
     x = aspp_block(
-        last_layer, num_filters=filters, rate_scale=rate, n_levels=n_levels)
+        last_layer, num_filters=filters, rate_scale=rate, n_levels=n_levels,
+        with_bn=False)
 
     target_shape = model.input_shape
 

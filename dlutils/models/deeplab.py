@@ -38,17 +38,14 @@ def _conv(**conv_params):
 
 def aspp_block(x,
                num_filters=256,
-               rate_scale=1,
+               rate_scale=6,
                n_levels=3,
-               output_stride=16,
-               input_shape=(512, 512, 3)):
+               with_bn=True):
     if K.image_data_format() == 'channels_last':
         bn_axis = 3
     else:
         bn_axis = 1
         assert False, 'bn_axis must be 3'
-
-    #conv3_3_1 = ZeroPadding2D(padding=(6 * rate_scale, 6 * rate_scale))(x)
 
     pyramid = []
 
@@ -56,30 +53,25 @@ def aspp_block(x,
         z = _conv(
             filters=num_filters,
             kernel_size=(3, 3),
-            dilation_rate=(6 * level * rate_scale, 6 * rate_scale))(x)
-        z = BatchNormalization(axis=bn_axis)(z)
+            dilation_rate=(level * rate_scale, rate_scale))(x)
+
+        if with_bn:
+            z = BatchNormalization(axis=bn_axis)(z)
         pyramid.append(z)
 
     # local kernel layer.
     z = _conv(filters=num_filters, kernel_size=(1, 1), padding='same')(x)
-    z = BatchNormalization(axis=bn_axis)(z)
+    if with_bn:
+        z = BatchNormalization(axis=bn_axis)(z)
     pyramid.append(z)
 
-    # TODO Consider original global features.
-    # global_feat = AveragePooling2D((input_shape[0] / output_stride,
-    #                                 input_shape[1] / output_stride))(x)
-    # global_feat = _conv(
-    #     filters=num_filters, kernel_size=(1, 1), padding='same')(global_feat)
-    # global_feat = BatchNormalization()(global_feat)
-    # global_feat = BilinearUpSampling2D(
-    #     (256, input_shape[0] / output_stride, input_shape[1] / output_stride),
-    #     factor=input_shape[1] / output_stride)(global_feat)
-
+    # concatenate
     y = concatenate(pyramid, axis=3)
 
-    # y = _conv_bn_relu(filters=1, kernel_size=(1, 1),padding='same')(y)
+    # y = _conv_bn_relu(filters=1, kernel_size=(1, 1), padding='same')(y)
     y = _conv(filters=num_filters * 4, kernel_size=(1, 1), padding='same')(y)
-    y = BatchNormalization()(y)
+    if with_bn:
+        y = BatchNormalization()(y)
 
     return y
 
