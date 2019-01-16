@@ -63,22 +63,23 @@ def write_config(config, path):
         os.makedirs(dirname)
 
     for key in config.keys():
-        for subkey, val in config[key].items():
-
-            print(subkey, val, type(val))
-
-            # dump numpy arrays as lists
-            if isinstance(val, np.ndarray):
-                config[key][subkey] = val.tolist()
-
-            elif isinstance(val, np.float64):
-                config[key][subkey] = float(val)
-
-            elif isinstance(val, (bool, str, int, float)):
-                pass
-
-            else:
-                config[key][subkey] = str(val)
+        if config[key] is not None:
+            for subkey, val in config[key].items():
+    
+                print(subkey, val, type(val))
+    
+                # dump numpy arrays as lists
+                if isinstance(val, np.ndarray):
+                    config[key][subkey] = val.tolist()
+    
+                elif isinstance(val, np.float64):
+                    config[key][subkey] = float(val)
+    
+                elif isinstance(val, (bool, str, int, float)):
+                    pass
+    
+                else:
+                    config[key][subkey] = str(val)
 
     yaml.safe_dump(
         {key: val

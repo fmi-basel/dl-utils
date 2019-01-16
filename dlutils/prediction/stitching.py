@@ -39,16 +39,12 @@ class StitchingGenerator(Sequence):
             raise IndexError('idx {} out of range {}'.format(idx, len(self)))
             
         batch_end = min((idx + 1) * self.batch_size, len(self.corners))
-        
         coord_batch = self.corners[ idx*self.batch_size : batch_end]
-    
         img_batch = []
         for idx, coord in enumerate(coord_batch):
             slices = tuple([
-                slice(x, x + dx )
-                for x, dx in zip(coord, self.patch_size)
+                slice(x, x + dx ) for x, dx in zip(coord, self.patch_size)
             ])
-            
             img_batch.append(self.image[slices])
             
         return dict(input=np.asarray(img_batch), coord=np.asarray(coord_batch))
@@ -65,29 +61,14 @@ class StitchingGenerator(Sequence):
     def calc_corners(self):
         '''
         '''
-        # corners of patches.
-        # ~ step_size = np.asarray(self.patch_size) - 2 * self.border
-        # ~ x = list(
-            # ~ range(0, self.image.shape[0] - self.patch_size[0], step_size[0]))
-        # ~ y = list(
-            # ~ range(0, self.image.shape[1] - self.patch_size[1], step_size[1]))
-        # ~ x.append(self.image.shape[0] - self.patch_size[0])
-        # ~ y.append(self.image.shape[1] - self.patch_size[1])
-        # ~ self.corners = [(i, j) for i in x for j in y]
-        
-        # ~ print(self.corners)
-        
-        # ~ [(0, 0), (0, 108), (0, 134), (108, 0), (108, 108), (108, 134), 
-        # ~ (216, 0), (216, 108), (216, 134), (324, 0), (324, 108), (324, 
-        # ~ 134), (432, 0), (432, 108), (432, 134), (477, 0), (477, 108), 
-        # ~ (477, 134)]
-        # ~ print('shape',self.image.shape)
-        # ~ print(self.patch_size)
-        # ~ print(self.border)
         
         # ignore last dim (channels)
-        flat_indices = [self._grid_points(self.image.shape[dim], self.patch_size[dim], self.border) for dim in range(self.image.ndim-1)]
-        # ~ print('flat',flat_indices)
+        
+        flat_indices = [self._grid_points(self.image.shape[dim], 
+                                          self.patch_size[dim],
+                                          self.border)
+                        for dim in range(self.image.ndim-1)]
+        
         self.corners = list(product(*flat_indices))
 
 def predict_complete(model, image, batch_size=None, patch_size=None,

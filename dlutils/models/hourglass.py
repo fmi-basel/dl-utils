@@ -213,15 +213,17 @@ def input_block(n_features, n_levels, cardinality, with_bn, dropout, dim_3D=Fals
     
     if dim_3D:
         Conv = Conv3D
+        ndim = 5
     else:
         Conv = Conv2D
+        ndim = 4
     
     def block(input_tensor):
         '''
         '''
         x=input_tensor
         
-        # ~ x = DynamicPaddingLayer(factor=2**n_levels, name='dpad')(x)
+        x = DynamicPaddingLayer(factor=2**n_levels, ndim=ndim, name='dpad')(x)
     
         x = Conv(
                 n_features,
@@ -279,8 +281,10 @@ def GenericHourglassBase(input_shape=None,
     n_features = int(width * 8)
     if len(input_shape) == 4:
         dim_3D = True
+        ndim = 5
     else:
         dim_3D = False
+        ndim = 4
 
     if cardinality < 1 or n_features % cardinality != 0:
         raise ValueError(
@@ -317,8 +321,8 @@ def GenericHourglassBase(input_shape=None,
         cardinality=cardinality,
         n_blocks_per_level=n_blocks,
         dim_3D=dim_3D)(x)
-
-    # ~ x = DynamicTrimmingLayer(name='dtrim')([img_input, x])
+    
+    x = DynamicTrimmingLayer(ndim=ndim, name='dtrim')([img_input, x])
     
     # TODO create separate output_block(), with option for downscaling
     if dim_3D:
