@@ -7,14 +7,14 @@ import numpy as np
 
 from dlutils.training.generator import LazyTrainingHandle
 from dlutils.preprocessing.normalization import standardize
+from dlutils.preprocessing.crop import crop_object
 from dlutils.training.augmentations import ImageDataAugmentation
 from dlutils.training.generator import TrainingGenerator
 from dlutils.training.split import split
 from dlutils.training.targets import generate_separator_map
 
 from skimage.external.tifffile import imread
-
-
+    
 class BinarySegmentationHandle(LazyTrainingHandle):
     def get_input_keys(self):
         '''returns a list of input keys
@@ -46,9 +46,11 @@ class BinarySegmentationHandle(LazyTrainingHandle):
         self['input'] = standardize(
             self['input'],
             min_scale=50)  # NOTE consider adjusting min_scale to your dataset
-
+            
         # load segmentation and make sure it's binary
         self['fg_pred'] = imread(self['segm_path']) >= 1
+        
+        # ~ self['input'], self['fg_pred'] = crop_object(self['input'], self['fg_pred'], margins=tuple(p//2 for p in self.patch_size))
 
         # add flat channel if needed
         for key in self.get_input_keys() + self.get_output_keys():
