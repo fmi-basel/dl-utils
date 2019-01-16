@@ -2,6 +2,7 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 from builtins import range
+from itertools import product
 
 from dlutils.models.utils import get_batch_size
 from dlutils.models.utils import get_patch_size
@@ -36,29 +37,58 @@ class StitchingGenerator(Sequence):
         # patches that contain foreground
         if idx > len(self):
             raise IndexError('idx {} out of range {}'.format(idx, len(self)))
+            
         batch_end = min((idx + 1) * self.batch_size, len(self.corners))
-        coord_batch, img_batch = list(
-            zip(*[((i, j), self.image[i:i + self.patch_size[0], j:j +
-                                      self.patch_size[1], ...])
-                  for i, j in self.corners[idx * self.batch_size:batch_end]]))
-
+        
+        coord_batch = self.corners[ idx*self.batch_size : batch_end]
+    
+        img_batch = []
+        for idx, coord in enumerate(coord_batch):
+            slices = tuple([
+                slice(x, x + dx )
+                for x, dx in zip(coord, self.patch_size)
+            ])
+            
+            img_batch.append(self.image[slices])
+            
         return dict(input=np.asarray(img_batch), coord=np.asarray(coord_batch))
-
+    
+    def _grid_points(self, img_size, patch_size, border):
+        '''
+        calculate points coordinates for a single dimension
+        '''
+        
+        step_size = patch_size - 2 * border
+        return list(range(0, img_size-patch_size, step_size)) + [img_size-patch_size,]
+        
+    
     def calc_corners(self):
         '''
         '''
         # corners of patches.
-        step_size = np.asarray(self.patch_size) - 2 * self.border
-        x = list(
-            range(0, self.image.shape[0] - self.patch_size[0], step_size[0]))
-        y = list(
-            range(0, self.image.shape[1] - self.patch_size[1], step_size[1]))
-        x.append(self.image.shape[0] - self.patch_size[0])
-        y.append(self.image.shape[1] - self.patch_size[1])
-        self.corners = [(i, j) for i in x for j in y]
-
-
-
+        # ~ step_size = np.asarray(self.patch_size) - 2 * self.border
+        # ~ x = list(
+            # ~ range(0, self.image.shape[0] - self.patch_size[0], step_size[0]))
+        # ~ y = list(
+            # ~ range(0, self.image.shape[1] - self.patch_size[1], step_size[1]))
+        # ~ x.append(self.image.shape[0] - self.patch_size[0])
+        # ~ y.append(self.image.shape[1] - self.patch_size[1])
+        # ~ self.corners = [(i, j) for i in x for j in y]
+        
+        # ~ print(self.corners)
+        
+        # ~ [(0, 0), (0, 108), (0, 134), (108, 0), (108, 108), (108, 134), 
+        # ~ (216, 0), (216, 108), (216, 134), (324, 0), (324, 108), (324, 
+        # ~ 134), (432, 0), (432, 108), (432, 134), (477, 0), (477, 108), 
+        # ~ (477, 134)]
+        # ~ print('shape',self.image.shape)
+        # ~ print(self.patch_size)
+        # ~ print(self.border)
+        
+        # ignore last dim (channels)
+        flat_indices = [self._grid_points(self.image.shape[dim], self.patch_size[dim], self.border) for dim in range(self.image.ndim-1)]
+        # ~ print('flat',flat_indices)
+        self.corners = list(product(*flat_indices))
 
 def predict_complete(model, image, batch_size=None, patch_size=None,
                      border=10):
@@ -107,7 +137,7 @@ def predict_complete(model, image, batch_size=None, patch_size=None,
     # TODO allow for prediction-time-augmentation
     generator = StitchingGenerator(
         image, patch_size=patch_size, batch_size=batch_size, border=border)
-
+    
     if len(model.output_names) > 1:
         responses = dict(
             (name, np.zeros(image.shape[:-1] + (out_shape[-1], )))

@@ -5,7 +5,6 @@
 # TODO:
 # somehow change layer naming for 3D? 3x3 --> 3x3x3
 # add options to downscale input
-# unit test for 2D/3D
 # intermediate supervision
 # 3D dynamic padding
 # groupdfilter for 3D
