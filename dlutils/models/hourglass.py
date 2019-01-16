@@ -321,7 +321,7 @@ def GenericHourglassBase(input_shape=None,
         cardinality=cardinality,
         n_blocks_per_level=n_blocks,
         dim_3D=dim_3D)(x)
-    
+
     x = DynamicTrimmingLayer(ndim=ndim, name='dtrim')([img_input, x])
     
     # TODO create separate output_block(), with option for downscaling

@@ -21,9 +21,10 @@ class DynamicPaddingLayer(Layer):
         if data_format is None:
             data_format = K.image_data_format()
         assert data_format in {'channels_last', 'channels_first'}
-
+        
+        self.ndim = ndim
         self.data_format = data_format
-        self.input_spec = [InputSpec(ndim=ndim)]
+        self.input_spec = [InputSpec(ndim=self.ndim)]
         self.factor = factor
         # if self.data_format == 'channels_first':
         #     self.target_size = (target_shape[2], target_shape[3])
@@ -63,8 +64,6 @@ class DynamicPaddingLayer(Layer):
         if self.data_format == 'channels_last':
             paddings = [[0, 0]] + [self.get_paddings(input_shape[dim]) 
                                 for dim in range(1,ndim-1)] + [[0, 0]]
-                        
-                        
         else:
             paddings = [[0, 0], [0, 0]] + [self.get_paddings(input_shape[dim]) 
                                         for dim in range(2,ndim)]
@@ -72,7 +71,9 @@ class DynamicPaddingLayer(Layer):
         return tf.pad(inputs, paddings, 'CONSTANT')
 
     def get_config(self):
-        config = {'factor': self.factor, 'data_format': self.data_format}
+        config = {'factor': self.factor,
+                  'data_format':self.data_format,
+                  'ndim':self.ndim}
         base_config = super(DynamicPaddingLayer, self).get_config()
         return dict(list(base_config.items()) + list(config.items()))
 
@@ -100,7 +101,7 @@ class DynamicTrimmingLayer(Layer):
         super(DynamicTrimmingLayer, self).__init__(**kwargs)
 
     def get_config(self):
-        config = {'data_format': self.data_format}
+        config = {'data_format': self.data_format, 'ndim':self.ndim}
         base_config = super(DynamicTrimmingLayer, self).get_config()
         return dict(list(base_config.items()) + list(config.items()))
 
