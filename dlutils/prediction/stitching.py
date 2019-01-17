@@ -56,19 +56,16 @@ class StitchingGenerator(Sequence):
         
         step_size = patch_size - 2 * border
         return list(range(0, img_size-patch_size, step_size)) + [img_size-patch_size,]
-        
-    
+            
     def calc_corners(self):
         '''
         '''
         
         # ignore last dim (channels)
-        
         flat_indices = [self._grid_points(self.image.shape[dim], 
                                           self.patch_size[dim],
                                           self.border)
                         for dim in range(self.image.ndim-1)]
-        
         self.corners = list(product(*flat_indices))
 
 def predict_complete(model, image, batch_size=None, patch_size=None,
