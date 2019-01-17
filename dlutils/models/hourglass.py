@@ -194,28 +194,17 @@ def hourglass_stack(n_stacks, n_features, n_levels, n_blocks_per_level, cardinal
     return block
 
 def input_block(n_features, n_levels, cardinality, with_bn, dropout, dim_3D=False):
-    ''' 
-    Filter input to increase number of channels to n_features.
-    
-    simple 1x1 convolution if no downscaling needed
-    
-    TODO 
-    implement downscaling layers if images are too large to process 
-    (upscaling output or downscaling labels also needed)
-    
-    original paper - 256 px --> 64 px
-    - 7x7 stride 2 : input channels --> base_features
-    - res module
-    - maxpool
-    - res module
-    - res module
+    '''     
+    TODO add option to use downscaling as in paper
+    or
+    keep original size and increase number of channel with conv
     '''
     
+    block_params = dict(cardinality=cardinality, with_bn=with_bn, 
+                        dropout=dropout, dim_3D=dim_3D)
     if dim_3D:
-        Conv = Conv3D
         ndim = 5
     else:
-        Conv = Conv2D
         ndim = 4
     
     def block(input_tensor):
@@ -223,14 +212,40 @@ def input_block(n_features, n_levels, cardinality, with_bn, dropout, dim_3D=Fals
         '''
         x=input_tensor
         
+        if dim_3D: #only downscale x,y for anisotropic data, compromise for memory usage
+            x = Conv3D(
+                    n_features,
+                    kernel_size=(3,7,7),
+                    strides=(1,2,2),
+                    name=get_unique_layer_name('c3x7x7'),
+                    padding='same')(x)
+            x = Activation('relu', name=get_unique_layer_name('relu'))(x)
+            x = bottleneck_conv_block(n_features, **block_params)(x)
+            x = MaxPooling3D((1,2,2), name=get_unique_layer_name('down2'))(x)
+            x = bottleneck_conv_block(n_features, **block_params)(x)
+            x = bottleneck_conv_block(n_features, **block_params)(x)
+        else:
+            x = Conv2D(
+                    n_features,
+                    kernel_size=7,
+                    strides=2,
+                    name=get_unique_layer_name('c7x7'),
+                    padding='same')(x)
+            x = Activation('relu', name=get_unique_layer_name('relu'))(x)
+            x = bottleneck_conv_block(n_features, **block_params)(x)
+            x = MaxPooling2D(2, name=get_unique_layer_name('down2'))(x)
+            x = bottleneck_conv_block(n_features, **block_params)(x)
+            x = bottleneck_conv_block(n_features, **block_params)(x)
+        
         x = DynamicPaddingLayer(factor=2**n_levels, ndim=ndim, name='dpad')(x)
-    
-        x = Conv(
-                n_features,
-                kernel_size=(1),
-                name=get_unique_layer_name('c1x1'),
-                padding='same')(x)
-        x = Activation('relu', name=get_unique_layer_name('relu'))(x)
+        
+        # alternatively don't downscale, simply change the number of channes to n_features
+        # ~ x = Conv(
+                # ~ n_features,
+                # ~ kernel_size=(1),
+                # ~ name=get_unique_layer_name('c1x1'),
+                # ~ padding='same')(x)
+        # ~ x = Activation('relu', name=get_unique_layer_name('relu'))(x)
         
         return x
     return block
@@ -258,25 +273,12 @@ def GenericHourglassBase(input_shape=None,
                       n_stacks=1,
                       n_levels=5,
                       n_blocks=1):
-    '''TODO doc
-    
+    '''
     From paper:
     
     Newell, Alejandro, Kaiyu Yang, and Jia Deng. "Stacked hourglass 
     networks for human pose estimation." European Conference on 
     Computer Vision. Springer, Cham, 2016.
-    
-    
-    
-    - hourglass
-        - 1x1
-        - split 1x1; 1x1(out features)1x1 base_features
-        - add 2 above + residual
-    - hourglass
-    
-    - 1x1 : base features --> ?
-    - 1x1 : ? --> output features
-
     '''
     n_features = int(width * 8)
     if len(input_shape) == 4:
@@ -321,10 +323,16 @@ def GenericHourglassBase(input_shape=None,
         cardinality=cardinality,
         n_blocks_per_level=n_blocks,
         dim_3D=dim_3D)(x)
+    
+    # TODO create separate output_block(), with option for upscaling
+    
+    # TODO linear interp, upscale output to match labels size (or downscale label)
+    if dim_3D:
+        x = UpSampling3D((1,4,4), name=get_unique_layer_name('up1-4-4'))(x)
+    else:
+        x = UpSampling2D((4,4), name=get_unique_layer_name('up4-4'))(x)
 
     x = DynamicTrimmingLayer(ndim=ndim, name='dtrim')([img_input, x])
-    
-    # TODO create separate output_block(), with option for downscaling
     if dim_3D:
         Conv = Conv3D
     else:
