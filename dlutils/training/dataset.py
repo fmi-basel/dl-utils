@@ -50,8 +50,6 @@ class BinarySegmentationHandle(LazyTrainingHandle):
         # load segmentation and make sure it's binary
         self['fg_pred'] = imread(self['segm_path']) >= 1
         
-        # ~ self['input'], self['fg_pred'] = crop_object(self['input'], self['fg_pred'], margins=tuple(p//2 for p in self.patch_size))
-
         # add flat channel if needed
         for key in self.get_input_keys() + self.get_output_keys():
             if self[key].ndim == len(self.patch_size):
@@ -121,6 +119,53 @@ class InstanceSegmentationHandleWithSeparatorMultislice(
             patches[key] = patches[key][..., patch_size[-1] // 2][..., None]
         return patches
 
+class InstanceSegmentationHandleWithDistanceMap(LazyTrainingHandle):
+    def get_input_keys(self):
+        '''returns a list of input keys.
+
+        '''
+        return ['input']
+
+    def get_output_keys(self):
+        '''returns a list of output keys.
+
+        '''
+        return ['fg_pred', 'transform_pred']
+
+    def __init__(self, img_path, segm_path, patch_size):
+        '''initializes handle with source paths and patch_size for sampling.
+
+        '''
+        self['img_path'] = img_path
+        self['segm_path'] = segm_path
+        self.patch_size = patch_size
+
+    def load(self):
+        '''
+        '''
+        if self.is_loaded():
+            return
+
+        self['input'] = imread(self['img_path'])
+        self['input'] = standardize(self['input'], min_scale=50)
+
+        segm = imread(self['segm_path'])
+        self['fg_pred'] = segm >= 1
+        
+        # ~ if segm.max() <= 0:
+        self['transform_pred'] = np.zeros_like(segm)
+            
+        self['input'], self['fg_pred'], self['transform_pred'] \
+                                = crop_object([self['input'], 
+                                               self['fg_pred'],
+                                               self['transform_pred']],
+                                               self['fg_pred'],
+                                               margins=(10,25,25))
+                                               
+        # add flat channel if needed
+        for key in self.get_input_keys() + self.get_output_keys():
+            if self[key].ndim == len(self.patch_size):
+                self[key] = self[key][..., None]
 
 def prepare_dataset(path_pairs,
                     task_type,
@@ -142,6 +187,8 @@ def prepare_dataset(path_pairs,
         Handle = BinarySegmentationHandle
     elif task_type == 'instance_segmentation':
         Handle = InstanceSegmentationHandleWithSeparator
+    elif task_type == 'instance_segmentation_distance_map':
+        Handle = InstanceSegmentationHandleWithDistanceMap
     else:
         raise ValueError('Unknown task_type: {}'.format(task_type))
 
