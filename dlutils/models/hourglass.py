@@ -6,8 +6,8 @@
 # somehow change layer naming for 3D? 3x3 --> 3x3x3
 # add options to downscale input
 # intermediate supervision
-# 3D dynamic padding
 # groupdfilter for 3D
+# 3D augment?
 
 from __future__ import absolute_import
 from __future__ import division
@@ -126,7 +126,6 @@ def hourglass_block(n_features, n_levels, n_blocks_per_level, cardinality,
     block_params = dict(cardinality=cardinality, with_bn=with_bn, 
                         dropout=dropout, dim_3D=dim_3D)
 
-    # TODO Enable 3D
     base_block = bottleneck_conv_block
     
     if dim_3D:
@@ -148,7 +147,7 @@ def hourglass_block(n_features, n_levels, n_blocks_per_level, cardinality,
             for _ in range(n_blocks_per_level):
                 x = base_block(n_features, **block_params)(x)
             
-            x = pooling(2, name=get_unique_layer_name('down2'))(x)
+            x = pooling((1,2,2), name=get_unique_layer_name('down2'))(x)
 
         # compressed representation
         for _ in range(n_blocks_per_level*3):
@@ -159,7 +158,7 @@ def hourglass_block(n_features, n_levels, n_blocks_per_level, cardinality,
             for _ in range(n_blocks_per_level):
                 links[level] = base_block(n_features, **block_params)(links[level])
             
-            x = upsampling(2, name=get_unique_layer_name('up2'))(x)
+            x = upsampling((1,2,2), name=get_unique_layer_name('up2'))(x)
             x = add([x, links[level]], name=get_unique_layer_name('add'))
 
             for _ in range(n_blocks_per_level):
@@ -204,48 +203,39 @@ def input_block(n_features, n_levels, cardinality, with_bn, dropout, dim_3D=Fals
                         dropout=dropout, dim_3D=dim_3D)
     if dim_3D:
         ndim = 5
+        Conv = Conv3D
+        pooling = MaxPooling3D
     else:
         ndim = 4
+        Conv = Conv2D
+        pooling = MaxPooling2D
     
     def block(input_tensor):
         '''
         '''
         x=input_tensor
         
-        if dim_3D: #only downscale x,y for anisotropic data, compromise for memory usage
-            x = Conv3D(
-                    n_features,
-                    kernel_size=(3,7,7),
-                    strides=(1,2,2),
-                    name=get_unique_layer_name('c3x7x7'),
-                    padding='same')(x)
-            x = Activation('relu', name=get_unique_layer_name('relu'))(x)
-            x = bottleneck_conv_block(n_features, **block_params)(x)
-            x = MaxPooling3D((1,2,2), name=get_unique_layer_name('down2'))(x)
-            x = bottleneck_conv_block(n_features, **block_params)(x)
-            x = bottleneck_conv_block(n_features, **block_params)(x)
-        else:
-            x = Conv2D(
-                    n_features,
-                    kernel_size=7,
-                    strides=2,
-                    name=get_unique_layer_name('c7x7'),
-                    padding='same')(x)
-            x = Activation('relu', name=get_unique_layer_name('relu'))(x)
-            x = bottleneck_conv_block(n_features, **block_params)(x)
-            x = MaxPooling2D(2, name=get_unique_layer_name('down2'))(x)
-            x = bottleneck_conv_block(n_features, **block_params)(x)
-            x = bottleneck_conv_block(n_features, **block_params)(x)
-        
-        x = DynamicPaddingLayer(factor=2**n_levels, ndim=ndim, name='dpad')(x)
-        
-        # alternatively don't downscale, simply change the number of channes to n_features
+        # ~ x = DynamicPaddingLayer(factor=2**(2+n_levels), ndim=ndim, name='dpad')(x)
         # ~ x = Conv(
                 # ~ n_features,
-                # ~ kernel_size=(1),
-                # ~ name=get_unique_layer_name('c1x1'),
+                # ~ kernel_size=(7),
+                # ~ strides=(2),
+                # ~ name=get_unique_layer_name('c7x7'),
                 # ~ padding='same')(x)
         # ~ x = Activation('relu', name=get_unique_layer_name('relu'))(x)
+        # ~ x = bottleneck_conv_block(n_features, **block_params)(x)
+        # ~ x = pooling(2, name=get_unique_layer_name('down2'))(x)
+        # alternatively don't downscale, simply change the number of channels to n_features
+        x = DynamicPaddingLayer(factor=2**n_levels, ndim=ndim, name='dpad')(x)
+        x = Conv(
+                n_features,
+                kernel_size=(7),
+                name=get_unique_layer_name('c1x1'),
+                padding='same')(x)
+        x = Activation('relu', name=get_unique_layer_name('relu'))(x)
+        
+        x = bottleneck_conv_block(n_features, **block_params)(x)
+        x = bottleneck_conv_block(n_features, **block_params)(x)
         
         return x
     return block
@@ -325,19 +315,17 @@ def GenericHourglassBase(input_shape=None,
         dim_3D=dim_3D)(x)
     
     # TODO create separate output_block(), with option for upscaling
-    
-    # TODO linear interp, upscale output to match labels size (or downscale label)
-    if dim_3D:
-        x = UpSampling3D((1,4,4), name=get_unique_layer_name('up1-4-4'))(x)
-    else:
-        x = UpSampling2D((4,4), name=get_unique_layer_name('up4-4'))(x)
-
-    x = DynamicTrimmingLayer(ndim=ndim, name='dtrim')([img_input, x])
     if dim_3D:
         Conv = Conv3D
+        upsampling = UpSampling3D
     else:
         Conv = Conv2D
-        
+        upsampling = UpSampling2D
+    
+    # upscale output to match labels size (else could implement downscale label)
+    # TODO linear/cubic interp
+    # ~ x = upsampling(4, name=get_unique_layer_name('up4'))(x)
+    x = DynamicTrimmingLayer(ndim=ndim, name='dtrim')([img_input, x])
     x = Conv(
             n_features,
             kernel_size=(1),
