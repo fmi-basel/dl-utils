@@ -6,12 +6,11 @@ from __future__ import unicode_literals
 from scipy.ndimage.morphology import grey_closing
 from scipy.ndimage.morphology import grey_dilation
 from scipy.ndimage.morphology import distance_transform_edt
+from scipy.ndimage import find_objects
+from scipy.ndimage.filters import gaussian_filter
 from skimage.segmentation import find_boundaries
 
-from numpy import logical_not
-from numpy import logical_and
-from numpy import float32
-from numpy import exp
+import numpy as np
 
 
 def generate_border_map(segmentation, border_width=1, decay=10):
@@ -35,10 +34,10 @@ def generate_border_map(segmentation, border_width=1, decay=10):
         segmentation, connectivity=2, mode='thick', background=0)
     if border_width > 0:
         grey_dilation(boundary, border_width, output=boundary)
-    boundary = logical_not(boundary)
-    boundary = boundary.astype(float32)
+    boundary = np.logical_not(boundary)
+    boundary = boundary.astype(np.float32)
     boundary = distance_transform_edt(boundary)
-    boundary = exp(-boundary / decay)
+    boundary = np.exp(-boundary / decay)
     return boundary
 
 
@@ -49,7 +48,7 @@ def generate_separator_map(segmentation, border_width=4, decay=10, reach=25):
     -----
     Border map is a detection heatmap calculated as
 
-     f(x) = exp( - dt(x) / decay )
+     f(x) = np.exp( - dt(x) / decay )
 
     where dt(..) is the distance transform from the segmentation
     border pixels. If segmentation is an instance segmentation,
@@ -69,13 +68,13 @@ def generate_separator_map(segmentation, border_width=4, decay=10, reach=25):
         grey_dilation(boundary, border_width, output=boundary)
 
     # limit separators to areas close to cells.
-    boundary = logical_and(boundary, dist <= reach)
+    boundary = np.logical_and(boundary, dist <= reach)
 
     # turn binary separator map into heatmap
-    boundary = logical_not(boundary)
-    boundary = boundary.astype(float32)
+    boundary = np.logical_not(boundary)
+    boundary = boundary.astype(np.float32)
     boundary = distance_transform_edt(boundary)
-    boundary = exp(-boundary / decay)
+    boundary = np.exp(-boundary / decay)
     return boundary
 
 
@@ -86,10 +85,31 @@ def generate_masked_separator(segmentation, maskval,
 
     '''
     separator = generate_separator_map(segmentation, *args, **kwargs)
-    mask = logical_and(segmentation == 0, separator <= truncate)
+    mask = np.logical_and(segmentation == 0, separator <= truncate)
     separator[mask] = maskval
     return separator
 
+def generate_distance_transform(segmentation, sampling=1.0, sigma=0.5):
+    '''calculate the distance transform separately for each labeled 
+    cluster.
+    
+    '''
+    if not isinstance(segmentation, np.ndarray) or segmentation.dtype != int:
+        raise ValueError('Expected an integer numpy.ndarray as segmentation labels, got: {}, {}'.format(
+                                type(segmentation), segmentation.dtype))
+    
+    # ~ sampling = np.asarray(sampling)
+    # ~ print(sampling)
+    # ~ input()
+    transform = np.zeros_like(segmentation, dtype=np.float)
+    for label in range(1,segmentation.max()+1):
+        loc = find_objects(segmentation == label)[0]
+        transform[loc] += distance_transform_edt(segmentation[loc]==label, sampling=sampling)
+        
+    transform_smooth = gaussian_filter(transform, sigma=0.5/np.asarray(sampling))
+    
+    return transform
+    
 
 def close_segmentation(segmentation, size, **kwargs):
     '''close holes in segmentation maps for training.
