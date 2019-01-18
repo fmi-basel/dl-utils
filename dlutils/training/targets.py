@@ -10,6 +10,8 @@ from scipy.ndimage import find_objects
 from scipy.ndimage.filters import gaussian_filter
 from skimage.segmentation import find_boundaries
 
+from dlutils.preprocessing.normalization import min_max_scaling
+
 import numpy as np
 
 
@@ -98,15 +100,14 @@ def generate_distance_transform(segmentation, sampling=1.0, sigma=0.5):
         raise ValueError('Expected an integer numpy.ndarray as segmentation labels, got: {}, {}'.format(
                                 type(segmentation), segmentation.dtype))
     
-    # ~ sampling = np.asarray(sampling)
-    # ~ print(sampling)
-    # ~ input()
     transform = np.zeros_like(segmentation, dtype=np.float)
     for label in range(1,segmentation.max()+1):
         loc = find_objects(segmentation == label)[0]
-        transform[loc] += distance_transform_edt(segmentation[loc]==label, sampling=sampling)
-        
-    transform_smooth = gaussian_filter(transform, sigma=0.5/np.asarray(sampling))
+        transformed_label = distance_transform_edt(segmentation[loc]==label, sampling=sampling)
+        transform[loc] += min_max_scaling(transformed_label)
+    
+    transform = gaussian_filter(transform, sigma=0.5/np.asarray(sampling))
+    transform = min_max_scaling(transform)
     
     return transform
     
