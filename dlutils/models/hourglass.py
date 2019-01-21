@@ -230,7 +230,7 @@ def input_block(n_features, n_levels, cardinality, with_bn, dropout, dim_3D=Fals
         x = Conv(
                 n_features,
                 kernel_size=(7),
-                name=get_unique_layer_name('c1x1'),
+                name=get_unique_layer_name('c7x7'),
                 padding='same')(x)
         x = Activation('relu', name=get_unique_layer_name('relu'))(x)
         
