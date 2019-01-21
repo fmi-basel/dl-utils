@@ -100,6 +100,8 @@ class InstanceSegmentationHandleWithSeparatorMultislice(
     def load(self):
         '''
         '''
+        if self.is_loaded():
+            return
         super(InstanceSegmentationHandleWithSeparatorMultislice, self).load()
 
         # move Z axis to last position and
