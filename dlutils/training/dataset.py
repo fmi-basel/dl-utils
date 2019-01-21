@@ -12,9 +12,10 @@ from dlutils.training.augmentations import ImageDataAugmentation
 from dlutils.training.generator import TrainingGenerator
 from dlutils.training.split import split
 from dlutils.training.targets import generate_separator_map
+from dlutils.training.targets import generate_distance_transform
 
 from skimage.external.tifffile import imread
-    
+
 class BinarySegmentationHandle(LazyTrainingHandle):
     def get_input_keys(self):
         '''returns a list of input keys
@@ -26,7 +27,7 @@ class BinarySegmentationHandle(LazyTrainingHandle):
         '''
         return ['fg_pred']
 
-    def __init__(self, img_path, segm_path, patch_size):
+    def __init__(self, img_path, segm_path, patch_size, *args, **kwargs):
         '''initializes handle with source paths and patch_size for sampling.
 
         '''
@@ -69,7 +70,7 @@ class InstanceSegmentationHandleWithSeparator(LazyTrainingHandle):
         '''
         return ['fg_pred', 'separator_pred']
 
-    def __init__(self, img_path, segm_path, patch_size):
+    def __init__(self, img_path, segm_path, patch_size, *args, **kwargs):
         '''initializes handle with source paths and patch_size for sampling.
 
         '''
@@ -119,6 +120,7 @@ class InstanceSegmentationHandleWithSeparatorMultislice(
             patches[key] = patches[key][..., patch_size[-1] // 2][..., None]
         return patches
 
+
 class InstanceSegmentationHandleWithDistanceMap(LazyTrainingHandle):
     def get_input_keys(self):
         '''returns a list of input keys.
@@ -132,13 +134,15 @@ class InstanceSegmentationHandleWithDistanceMap(LazyTrainingHandle):
         '''
         return ['fg_pred', 'transform_pred']
 
-    def __init__(self, img_path, segm_path, patch_size):
+    def __init__(self, img_path, segm_path, patch_size, crop_margins, sampling):
         '''initializes handle with source paths and patch_size for sampling.
 
         '''
         self['img_path'] = img_path
         self['segm_path'] = segm_path
         self.patch_size = patch_size
+        self.sampling = sampling
+        self.crop_margins = crop_margins
 
     def load(self):
         '''
@@ -149,19 +153,20 @@ class InstanceSegmentationHandleWithDistanceMap(LazyTrainingHandle):
         self['input'] = imread(self['img_path'])
         self['input'] = standardize(self['input'], min_scale=50)
 
-        segm = imread(self['segm_path'])
+        segm = imread(self['segm_path']).astype(np.int, copy=False)
         self['fg_pred'] = segm >= 1
         
-        # ~ if segm.max() <= 0:
-        self['transform_pred'] = np.zeros_like(segm)
-            
-        self['input'], self['fg_pred'], self['transform_pred'] \
-                                = crop_object([self['input'], 
-                                               self['fg_pred'],
-                                               self['transform_pred']],
-                                               self['fg_pred'],
-                                               margins=(10,25,25))
-                                               
+        self['transform_pred'] = generate_distance_transform(segm, 
+                                                sampling=self.sampling,
+                                                sigma=0.5)
+        if self.crop_margins is not None:    
+            self['input'], self['fg_pred'], self['transform_pred'] \
+                                    = crop_object([self['input'], 
+                                                   self['fg_pred'],
+                                                   self['transform_pred']],
+                                                   self['fg_pred'],
+                                                   margins=self.crop_margins)
+                                                                      
         # add flat channel if needed
         for key in self.get_input_keys() + self.get_output_keys():
             if self[key].ndim == len(self.patch_size):
@@ -172,6 +177,8 @@ def prepare_dataset(path_pairs,
                     patch_size,
                     split_ratio=0.2,
                     augmentation_params=None,
+                    crop_margins=None,
+                    sampling=None,
                     **config_params):
     '''create a generator for training samples and validation samples.
 
@@ -201,9 +208,11 @@ def prepare_dataset(path_pairs,
         stratify = None
 
     train_handles, validation_handles = split(
-        [Handle(*paths, patch_size=patch_size) for paths in path_pairs],
-        split_ratio,
-        stratify=stratify)
+        [Handle(*paths, patch_size=patch_size,
+                crop_margins=crop_margins,
+                sampling=sampling) for paths in path_pairs],
+            split_ratio,
+            stratify=stratify)
 
     logger = logging.getLogger(__name__)
     logger.info('Training samples: %i', len(train_handles))

@@ -102,6 +102,8 @@ def generate_distance_transform(segmentation, sampling=1.0, sigma=0.5):
     if not isinstance(segmentation, np.ndarray) or segmentation.dtype != int:
         raise ValueError('Expected an integer numpy.ndarray as segmentation labels, got: {}, {}'.format(
                                 type(segmentation), segmentation.dtype))
+    if sampling is None:
+        sampling = 1.0
     
     transform = np.zeros_like(segmentation, dtype=np.float)
     for label in range(1,segmentation.max()+1):
