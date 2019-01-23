@@ -16,6 +16,8 @@ from dlutils.training.targets import generate_distance_transform
 
 from skimage.external.tifffile import imread
 
+from keras.utils.np_utils import to_categorical
+
 class BinarySegmentationHandle(LazyTrainingHandle):
     def get_input_keys(self):
         '''returns a list of input keys
@@ -173,6 +175,34 @@ class InstanceSegmentationHandleWithDistanceMap(LazyTrainingHandle):
         for key in self.get_input_keys() + self.get_output_keys():
             if self[key].ndim == len(self.patch_size):
                 self[key] = self[key][..., None]
+            
+class InstanceSegmentationHandleWithDistanceMapMultislice(
+        InstanceSegmentationHandleWithDistanceMap):
+    def load(self):
+        '''
+        '''
+        if self.is_loaded():
+            return
+        super(InstanceSegmentationHandleWithDistanceMapMultislice, self).load()
+
+        # move Z axis to last position and
+        # we probably have to remove the flat dimension at the end.
+        for key in self.get_input_keys() + self.get_output_keys():
+            if self[key].shape[-1] == 1:
+                self[key] = np.squeeze(self[key], axis=-1)
+            self[key] = np.moveaxis(self[key], 0, -1)
+
+    def get_random_patch(self, patch_size, *args, **kwargs):
+        '''
+        '''
+        patches = super(InstanceSegmentationHandleWithDistanceMapMultislice,
+                        self).get_random_patch(patch_size, *args, **kwargs)
+
+        # subselect middle plane of outputs
+        for key in self.get_output_keys():
+            patches[key] = patches[key][..., patch_size[-1] // 2][..., None]
+            
+        return patches
 
 def prepare_dataset(path_pairs,
                     task_type,
@@ -198,6 +228,8 @@ def prepare_dataset(path_pairs,
         Handle = InstanceSegmentationHandleWithSeparator
     elif task_type == 'instance_segmentation_distance_map':
         Handle = InstanceSegmentationHandleWithDistanceMap
+    elif task_type == 'instance_segmentation_distance_map_multislice':
+        Handle = InstanceSegmentationHandleWithDistanceMapMultislice
     else:
         raise ValueError('Unknown task_type: {}'.format(task_type))
 
