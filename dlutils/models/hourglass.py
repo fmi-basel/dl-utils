@@ -155,7 +155,8 @@ def hourglass_block(n_features, n_levels, n_blocks_per_level, cardinality,
             for _ in range(n_blocks_per_level):
                 x = base_block(n_features, **block_params)(x)
             
-            x = pooling((1,2,2), name=get_unique_layer_name('down2'))(x)
+            # ~ x = pooling((1,2,2), name=get_unique_layer_name('down2'))(x) # anisotropic
+            x = pooling(2, name=get_unique_layer_name('down2'))(x)
 
         # compressed representation
         for _ in range(n_blocks_per_level*3):
@@ -166,8 +167,17 @@ def hourglass_block(n_features, n_levels, n_blocks_per_level, cardinality,
             for _ in range(n_blocks_per_level):
                 links[level] = base_block(n_features, **block_params)(links[level])
             
-            x = upsampling((1,2,2), name=get_unique_layer_name('up2'))(x)
-            x = add([x, links[level]], name=get_unique_layer_name('add'))
+            # ~ x = upsampling((1,2,2), name=get_unique_layer_name('up2'))(x)
+            x = upsampling(2, name=get_unique_layer_name('up2'))(x) # anisotropic
+            # ~ x = add([x, links[level]], name=get_unique_layer_name('add'))
+            
+            x = concatenate([x, links[level]])
+            x = Activation('relu', name=get_unique_layer_name('relu'))(x)
+            x = Conv2D(
+                n_features,
+                kernel_size=(1),
+                padding='same',
+                name=get_unique_layer_name('c1x1'))(x)
 
             for _ in range(n_blocks_per_level):
                 x = base_block(n_features, **block_params)(x)
@@ -240,7 +250,6 @@ def input_block(n_features, n_levels, cardinality, with_bn, dropout, dim_3D=Fals
                 kernel_size=(7),
                 name=get_unique_layer_name('c7x7'),
                 padding='same')(x)
-        x = Activation('relu', name=get_unique_layer_name('relu'))(x)
         
         x = bottleneck_conv_block(n_features, **block_params)(x)
         x = bottleneck_conv_block(n_features, **block_params)(x)
@@ -277,8 +286,11 @@ def GenericHourglassBase(input_shape=None,
     Newell, Alejandro, Kaiyu Yang, and Jia Deng. "Stacked hourglass 
     networks for human pose estimation." European Conference on 
     Computer Vision. Springer, Cham, 2016.
+    
+    except additions are replaced by concatenations followed by 1x1 conv 
+    to reduce the number of channels by half
     '''
-    n_features = int(width * 8)
+    n_features = int(width * 16)
     if len(input_shape) == 4:
         dim_3D = True
         ndim = 5
@@ -321,6 +333,7 @@ def GenericHourglassBase(input_shape=None,
         cardinality=cardinality,
         n_blocks_per_level=n_blocks,
         dim_3D=dim_3D)(x)
+    x = DynamicTrimmingLayer(ndim=ndim, name='dtrim')([img_input, x])
     
     # TODO create separate output_block(), with option for upscaling
     if dim_3D:
@@ -333,14 +346,20 @@ def GenericHourglassBase(input_shape=None,
     # upscale output to match labels size (else could implement downscale label)
     # TODO linear/cubic interp
     # ~ x = upsampling(4, name=get_unique_layer_name('up4'))(x)
-    x = DynamicTrimmingLayer(ndim=ndim, name='dtrim')([img_input, x])
+    x = Activation('relu', name=get_unique_layer_name('relu'))(x)
     x = Conv(
             n_features,
-            kernel_size=(1),
-            name=get_unique_layer_name('c1x1'),
+            kernel_size=(3),
+            name=get_unique_layer_name('c3x3'),
             padding='same')(x)
     x = Activation('relu', name=get_unique_layer_name('relu'))(x)
-
+    x = Conv(
+            n_features,
+            kernel_size=(3),
+            name=get_unique_layer_name('c3x3'),
+            padding='same')(x)
+    x = Activation('relu', name=get_unique_layer_name('relu'))(x)
+    
     if input_tensor is not None:
         inputs = get_source_inputs(input_tensor)
     else:
