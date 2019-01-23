@@ -48,6 +48,14 @@ def bottleneck_conv_block(n_features,
                         cardinality=1,
                         dim_3D=False):
     '''
+    
+    Notes
+    -----
+    pre-activation to keep the residual path clear as described in:
+    
+    HE, Kaiming, et al. Identity mappings in deep residual networks. 
+    In: European conference on computer vision. Springer, Cham, 2016. 
+    S. 630-645.
     '''
     # conv layer definitions.
     if dim_3D:
@@ -72,18 +80,21 @@ def bottleneck_conv_block(n_features,
         # 1x1 channels//2
         if with_bn:
             x = BatchNormalization(name=get_unique_layer_name('bn'))(x)
+        x = Activation(activation, name=get_unique_layer_name(activation))(x)
+        if dropout > 0.:
+            x = Dropout(dropout, name=get_unique_layer_name('do'))(x)
         x = Conv(
             n_features//2,
             kernel_size=(1),
             name=get_unique_layer_name('c1x1'),
             **conv_kwargs)(x)
-        x = Activation(activation, name=get_unique_layer_name(activation))(x)
-        if dropout > 0.:
-            x = Dropout(dropout, name=get_unique_layer_name('do'))(x)
         
         # 3x3 channels//2
         if with_bn:
             x = BatchNormalization(name=get_unique_layer_name('bn'))(x)
+        x = Activation(activation, name=get_unique_layer_name(activation))(x)
+        if dropout > 0.:
+            x = Dropout(dropout, name=get_unique_layer_name('do'))(x)
         if cardinality == 1:
             x = Conv(
                 n_features//2,
@@ -97,21 +108,18 @@ def bottleneck_conv_block(n_features,
                 cardinality=cardinality,
                 name=get_unique_layer_name('g{:d}c3x3'.format(cardinality)),
                 **conv_kwargs)(x)
-        x = Activation(activation, name=get_unique_layer_name(activation))(x)
-        if dropout > 0.:
-            x = Dropout(dropout, name=get_unique_layer_name('do'))(x)
         
         # 1x1 channels
         if with_bn:
             x = BatchNormalization(name=get_unique_layer_name('bn'))(x)
+        x = Activation(activation, name=get_unique_layer_name(activation))(x)
+        if dropout > 0.:
+            x = Dropout(dropout, name=get_unique_layer_name('do'))(x)
         x = Conv(
             n_features,
             kernel_size=(1),
             name=get_unique_layer_name('c1x1'),
             **conv_kwargs)(x)
-        x = Activation(activation, name=get_unique_layer_name(activation))(x)
-        if dropout > 0.:
-            x = Dropout(dropout, name=get_unique_layer_name('do'))(x)
         
         x = add([input_tensor, x], name=get_unique_layer_name('add'))
         return x
