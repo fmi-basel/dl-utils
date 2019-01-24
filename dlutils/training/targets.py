@@ -107,13 +107,15 @@ def generate_distance_transform(segmentation, sampling=1.0, sigma=0.5):
     
     transform = np.zeros_like(segmentation, dtype=np.float)
     for label in range(1,segmentation.max()+1):
-        loc = find_objects(segmentation == label)[0]
-        # expand the slice to make sure a borders are visible when labels
-        # are aligned vertically or horizontally 
-        loc = tuple(slice(min(0,sli.start-1),sli.stop+1) for sli in loc)
-        
-        transformed_label = distance_transform_edt(segmentation[loc]==label, sampling=sampling)
-        transform[loc] += min_max_scaling(transformed_label)
+        loc = find_objects(segmentation == label)
+        if loc:
+            loc = loc[0]
+            # expand the slice to make sure a borders are visible when labels
+            # are aligned vertically or horizontally 
+            loc = tuple(slice(max(0,sli.start-1),sli.stop+1) for sli in loc)
+            
+            transformed_label = distance_transform_edt(segmentation[loc]==label, sampling=sampling)
+            transform[loc] += min_max_scaling(transformed_label)
     
     transform = gaussian_filter(transform, sigma=0.5/np.asarray(sampling))
     transform = min_max_scaling(transform)
