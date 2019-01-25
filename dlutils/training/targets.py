@@ -117,11 +117,20 @@ def generate_distance_transform(segmentation, sampling=1.0, sigma=0.5):
             transformed_label = distance_transform_edt(segmentation[loc]==label, sampling=sampling)
             transform[loc] += min_max_scaling(transformed_label)
     
-    transform = gaussian_filter(transform, sigma=0.5/np.asarray(sampling))
-    transform = min_max_scaling(transform)
+    if sigma > 0:
+        transform = gaussian_filter(transform, sigma=0.5/np.asarray(sampling))
+        transform = min_max_scaling(transform)
     
     return transform
     
+
+def add_border_annotation(segmentation):
+    '''Adds borders with label=-1 to an existing segmentation mask 
+    '''
+    
+    boundary = find_boundaries(segmentation, connectivity=1, mode='outer', background=0)
+    np.putmask(segmentation, boundary, -1) # inplace
+    return segmentation
 
 def close_segmentation(segmentation, size, **kwargs):
     '''close holes in segmentation maps for training.
