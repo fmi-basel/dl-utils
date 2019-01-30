@@ -13,6 +13,7 @@ from dlutils.training.generator import TrainingGenerator
 from dlutils.training.split import split
 from dlutils.training.targets import generate_separator_map
 from dlutils.training.targets import generate_distance_transform
+from dlutils.training.targets import add_border_annotation
 
 from skimage.external.tifffile import imread
 
@@ -136,7 +137,7 @@ class InstanceSegmentationHandleWithDistanceMap(LazyTrainingHandle):
         '''returns a list of output keys.
 
         '''
-        return ['fg_pred', 'transform_pred']
+        return ['fg_pred', 'transform_pred', 'segmentation']
 
     def __init__(self, img_path, segm_path, patch_size, crop_margins, sampling):
         '''initializes handle with source paths and patch_size for sampling.
@@ -160,14 +161,17 @@ class InstanceSegmentationHandleWithDistanceMap(LazyTrainingHandle):
         segm = imread(self['segm_path']).astype(np.int, copy=False)
         self['fg_pred'] = segm >= 1
         
+        self['segmentation'] = add_border_annotation(segm)
+        
         self['transform_pred'] = generate_distance_transform(segm, 
                                                 sampling=self.sampling,
-                                                sigma=0.5)
+                                                sigma=0.0)
         if self.crop_margins is not None:    
-            self['input'], self['fg_pred'], self['transform_pred'] \
+            self['input'], self['fg_pred'], self['transform_pred'], self['segmentation'] \
                                     = crop_object([self['input'], 
                                                    self['fg_pred'],
-                                                   self['transform_pred']],
+                                                   self['transform_pred'],
+                                                   self['segmentation']],
                                                    self['fg_pred'],
                                                    margins=self.crop_margins)
                                                                       
@@ -185,12 +189,12 @@ class InstanceSegmentationHandleWithDistanceMapMultislice(
             return
         super(InstanceSegmentationHandleWithDistanceMapMultislice, self).load()
 
-        # move Z axis to last position and
+        # move Z axis to third position and
         # we probably have to remove the flat dimension at the end.
         for key in self.get_input_keys() + self.get_output_keys():
             if self[key].shape[-1] == 1:
                 self[key] = np.squeeze(self[key], axis=-1)
-            self[key] = np.moveaxis(self[key], 0, -1)
+            self[key] = np.moveaxis(self[key], 0, 2)
 
     def get_random_patch(self, patch_size, *args, **kwargs):
         '''
@@ -200,7 +204,9 @@ class InstanceSegmentationHandleWithDistanceMapMultislice(
 
         # subselect middle plane of outputs
         for key in self.get_output_keys():
-            patches[key] = patches[key][..., patch_size[-1] // 2][..., None]
+            patches[key] = patches[key][:,:, patch_size[-1] // 2]
+            if patches[key].ndim < len(self.patch_size):
+                patches[key] = patches[key][..., None]
             
         return patches
 
