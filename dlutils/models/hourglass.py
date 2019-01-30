@@ -127,7 +127,7 @@ def bottleneck_conv_block(n_features,
     return block
 
 def hourglass_block(n_features, n_levels, n_blocks_per_level, cardinality,
-               with_bn, dropout, dim_3D=False):
+               with_bn, anisotropic, dropout, dim_3D=False):
     '''
     '''
 
@@ -139,9 +139,15 @@ def hourglass_block(n_features, n_levels, n_blocks_per_level, cardinality,
     if dim_3D:
         pooling = MaxPooling3D
         upsampling = UpSampling3D
+        Conv = Conv3D
     else:
         pooling = MaxPooling2D
         upsampling = UpSampling2D
+        Conv = Conv2D
+    if anisotropic:
+        size_factor=(1,2,2)
+    else:
+        size_factor=(2)
     
     def block(input_tensor):
         '''
@@ -155,8 +161,7 @@ def hourglass_block(n_features, n_levels, n_blocks_per_level, cardinality,
             for _ in range(n_blocks_per_level):
                 x = base_block(n_features, **block_params)(x)
             
-            # ~ x = pooling((1,2,2), name=get_unique_layer_name('down2'))(x) # anisotropic
-            x = pooling(2, name=get_unique_layer_name('down2'))(x)
+            x = pooling(size_factor, name=get_unique_layer_name('down2'))(x)
 
         # compressed representation
         for _ in range(n_blocks_per_level*3):
@@ -167,13 +172,12 @@ def hourglass_block(n_features, n_levels, n_blocks_per_level, cardinality,
             for _ in range(n_blocks_per_level):
                 links[level] = base_block(n_features, **block_params)(links[level])
             
-            # ~ x = upsampling((1,2,2), name=get_unique_layer_name('up2'))(x)
-            x = upsampling(2, name=get_unique_layer_name('up2'))(x) # anisotropic
+            x = upsampling(size_factor, name=get_unique_layer_name('up2'))(x) # anisotropic
             # ~ x = add([x, links[level]], name=get_unique_layer_name('add'))
             
             x = concatenate([x, links[level]])
             x = Activation('relu', name=get_unique_layer_name('relu'))(x)
-            x = Conv2D(
+            x = Conv(
                 n_features,
                 kernel_size=(1),
                 padding='same',
@@ -186,7 +190,7 @@ def hourglass_block(n_features, n_levels, n_blocks_per_level, cardinality,
     return block
     
 def hourglass_stack(n_stacks, n_features, n_levels, n_blocks_per_level, cardinality,
-               with_bn, dropout, dim_3D=False):
+               with_bn, anisotropic, dropout, dim_3D=False):
     '''
     '''
 
@@ -199,6 +203,7 @@ def hourglass_stack(n_stacks, n_features, n_levels, n_blocks_per_level, cardinal
             x = hourglass_block(
                 dropout=dropout,
                 with_bn=with_bn,
+                anisotropic=anisotropic,
                 n_levels=n_levels,
                 n_features=n_features,
                 cardinality=cardinality,
@@ -257,7 +262,8 @@ def input_block(n_features, n_levels, cardinality, with_bn, dropout, dim_3D=Fals
         return x
     return block
 
-def get_model_name(width, cardinality, n_stacks, n_levels, n_blocks, dropout, with_bn,
+def get_model_name(width, cardinality, n_stacks, n_levels, n_blocks, 
+                    dropout, with_bn, dim_3D, anisotropic,
                    **kwargs):
     '''
     '''
@@ -267,6 +273,10 @@ def get_model_name(width, cardinality, n_stacks, n_levels, n_blocks, dropout, wi
         name += '-BN'
     if dropout is not None:
         name += '-D{}'.format(dropout)
+    if dim_3D:
+        name += '-3D'
+    if anisotropic:
+        name += '-A'
     return name
 
 
@@ -275,6 +285,7 @@ def GenericHourglassBase(input_shape=None,
                       batch_size=None,
                       dropout=None,
                       with_bn=False,
+                      anisotropic=False,
                       width=1,
                       cardinality=1,
                       n_stacks=1,
@@ -302,6 +313,8 @@ def GenericHourglassBase(input_shape=None,
         raise ValueError(
             'cardinality must be integer and a divisor of n_features.'
             ' ({} / {} != 0'.format(n_features, cardinality))
+    if anisotropic and not dim_3D:
+        raise ValueError('anisotropic option only available for 3D inputs')
 
     # Assemble input
     # NOTE we use flexible sized inputs per default.
@@ -327,6 +340,7 @@ def GenericHourglassBase(input_shape=None,
     x = hourglass_stack(
         dropout=dropout,
         with_bn=with_bn,
+        anisotropic=anisotropic,
         n_stacks=n_stacks,
         n_levels=n_levels,
         n_features=n_features,
@@ -375,4 +389,6 @@ def GenericHourglassBase(input_shape=None,
             n_levels=n_levels,
             n_blocks=n_blocks,
             dropout=dropout,
-            with_bn=with_bn))
+            with_bn=with_bn,
+            dim_3D=dim_3D,
+            anisotropic=anisotropic))
