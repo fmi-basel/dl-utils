@@ -4,11 +4,15 @@ from __future__ import print_function
 from __future__ import unicode_literals
 
 from scipy.ndimage.morphology import grey_closing
-from scipy.ndimage.morphology import grey_dilation
+from scipy.ndimage.morphology import grey_dilation, grey_erosion, morphological_gradient
 from scipy.ndimage.morphology import distance_transform_edt
 from scipy.ndimage import find_objects
 from scipy.ndimage.filters import gaussian_filter
+from scipy.signal import gaussian
+from scipy.ndimage.measurements import center_of_mass
+from scipy.spatial.distance import cdist
 from skimage.segmentation import find_boundaries
+from skimage.morphology import thin, skeletonize, skeletonize_3d
 
 from dlutils.preprocessing.normalization import min_max_scaling
 
@@ -122,15 +126,143 @@ def generate_distance_transform(segmentation, sampling=1.0, sigma=0.5):
         transform = min_max_scaling(transform)
     
     return transform
+
+
+def paste_slices(tup):
+  pos, w, max_w = tup
+  wall_min = max(pos, 0)
+  wall_max = min(pos+w, max_w)
+  block_min = -min(pos, 0)
+  block_max = max_w-max(pos+w, max_w)
+  block_max = block_max if block_max != 0 else None
+  return slice(wall_min, wall_max), slice(block_min, block_max)
+
+def paste(wall, block, loc):
+  loc_zip = zip(loc, block.shape, wall.shape)
+  wall_slices, block_slices = zip(*map(paste_slices, loc_zip))
+  wall[wall_slices] += block[block_slices]
+
+def generate_seed_map(segmentation, sampling=1.0, sigma=1.5):
+    '''
     
+    Notes
+    -----
+    point on skeleton closest to center mass = center
+    '''
+    if sampling is None:
+        sampling = 1.0
+    
+    # TODO split help functions (gkernel, get_center, place kernel)
+    
+    # TODO anisotric kernel based on sampling
+    # ~ kernel_size = int(sigma*4) 
+    # ~ kernel_size +=  1 - kernel_size%1 # odd size  kernel
+    # ~ gkern1d = gaussian(kernel_size, std=sigma)
+    # ~ gkern = np.matmul(gkern1d.reshape(-1,1), gkern1d.reshape(1,-1))
+    # ~ if segmentation.ndim == 3:
+        # ~ gkern = np.matmul(gkern.reshape(kernel_size,kernel_size,1), gkern1d.reshape(1,1,-1))
+        
+    seed_map = np.zeros_like(segmentation, dtype=np.float32)
+    for label in np.unique(segmentation):
+        if label > 0:
+            loc = find_objects(segmentation == label)[0]
+            offset = np.asarray([sli.start for sli in loc])              
+            # ~ #  skeleton = thin(segmentation[loc]==label)
+            skeleton = skeletonize_3d(segmentation[loc]==label)
+            skeleton = np.argwhere(skeleton)+offset
+            center_mass = center_of_mass(segmentation[loc]==label)
+            center_mass = np.asarray(center_mass) + offset
+            if skeleton.shape[0] > 0: # skeletonize_3d sometimes return empty image??
+                dist_to_center_mass = cdist([center_mass], skeleton, 'euclidean')
+                center = skeleton[ np.argmin(dist_to_center_mass) ]#.reshape(2,1)
+            else:
+                center = center_mass.astype(int)
+                
+            # ~ paste(seed_map, gkern, tuple(center))
+            seed_map[tuple(center)] = 1.
+    
+    seed_map = gaussian_filter(seed_map, sigma=sigma/np.asarray(sampling))
+    seed_map = transform = min_max_scaling(seed_map)
+        
+    return seed_map
+    
+def generate_center_map(segmentation):
+    '''split each instance in two labels: center, surround based on normalized distance transform
+    '''
+    
+    normalization = np.zeros_like(segmentation, dtype=np.float32)
+    center_map = np.zeros_like(segmentation)
+    
+    dist = generate_distance_transform(segmentation)
+    outer = np.logical_and(dist>0.0, dist<0.5)
+    
+    np.putmask(segmentation, outer, -2)
+    
+    n_labels = 0
+    for label in np.unique(segmentation):
+        if label > 0:
+            area = (segmentation==label).sum()
+            np.putmask(normalization, segmentation==label, 1./area)
+            n_labels += 1
+    
+    if n_labels > 1:        
+        normalization = normalization / n_labels
+    
+    return np.stack([segmentation, normalization], axis=-1)
 
 def add_border_annotation(segmentation):
     '''Adds borders with label=-1 to an existing segmentation mask 
     '''
+    normalization = np.zeros_like(segmentation, dtype=np.float32)
     
-    boundary = find_boundaries(segmentation, connectivity=1, mode='outer', background=0)
-    np.putmask(segmentation, boundary, -1) # inplace
-    return segmentation
+    # ~ for z in range(segmentation.shape[0]):
+        # ~ closed_segmentation = close_segmentation(segmentation[z], 3)
+        
+        # ~ boundaries = find_boundaries(closed_segmentation, connectivity=closed_segmentation.ndim, mode='inner', background=0)
+        # ~ dist_to_background = distance_transform_edt( closed_segmentation>0 )
+        # ~ separators = np.logical_and(boundaries, dist_to_background >2)
+        # ~ separators = grey_dilation(separators, 5)
+        
+        # ~ transition_zone = np.logical_xor(grey_erosion(segmentation[z], 3)>0, grey_dilation(segmentation[z], 3)>0)
+        
+        # ~ np.putmask(segmentation[z], transition_zone, -2)
+        # ~ np.putmask(segmentation[z], separators, -1)
+        
+        # ~ n_labels = 0
+        # ~ for label in np.unique(segmentation[z]):
+            # ~ if label > 0:
+                # ~ area = (segmentation[z]==label).sum()
+                # ~ np.putmask(normalization[z], segmentation[z]==label, 1./area)
+                # ~ n_labels += 1
+        
+        # ~ if n_labels > 1:        
+            # ~ normalization[z] = normalization[z] / n_labels
+
+        
+    closed_segmentation = close_segmentation(segmentation,3)
+        
+    boundaries = find_boundaries(closed_segmentation, connectivity=closed_segmentation.ndim, mode='inner', background=0)
+    dist_to_background = distance_transform_edt( closed_segmentation>0 )
+    separators = np.logical_and(boundaries, dist_to_background >2)
+    separators = grey_dilation(separators, 1)
+    
+    transition_zone = np.logical_xor(grey_erosion(segmentation, 9)>0, grey_dilation(segmentation, 3)>0)
+    
+    np.putmask(segmentation, transition_zone, -2)
+    # ~ np.putmask(segmentation, separators, -1)
+    
+    n_labels = 0
+    for label in np.unique(segmentation):
+        if label > 0:
+            area = (segmentation==label).sum()
+            np.putmask(normalization, segmentation==label, 1./area)
+            n_labels += 1
+    
+    if n_labels > 1:        
+        normalization = normalization / n_labels
+        
+
+    return np.stack([segmentation, normalization], axis=-1)
 
 def close_segmentation(segmentation, size, **kwargs):
     '''close holes in segmentation maps for training.
