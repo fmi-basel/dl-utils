@@ -210,6 +210,70 @@ def generate_center_map(segmentation):
     
     return np.stack([segmentation, normalization], axis=-1)
 
+def generate_locationmap(shape, period=50., offset=0.):
+    '''Returns a periodic intensity map encoding image location
+    '''
+    
+    ndim = len(shape)
+    if isinstance(period, (list,tuple)):
+        if len(period) == 1:
+            period = period*ndim
+        elif len(period) != ndim:
+            raise ValueError('wrong dimension of period argument, expected 1 or {}, got: {}'.format(ndim, len(period)) )
+    else:
+        period = (period,)*ndim
+        
+    if isinstance(offset, (list,tuple)):
+        if len(offset) == 1:
+            offset = offset*ndim
+        elif len(offset) != ndim:
+            raise ValueError('wrong dimension of offset argument, expected 1 or {}, got: {}'.format(ndim, len(offset)) )
+    else:
+        offset = (offset,)*ndim
+    
+    period = np.asarray(period)
+    offset = np.asarray(offset)
+    amplitude = (1./len(shape),)*ndim
+    w = 2*np.pi/period
+    phase = offset*2*np.pi/period
+    
+    def f1d(x, amplitude, w, phase):
+        return amplitude*np.sin(x*w+phase)
+        
+    def f(*args):        
+        return sum( f1d(*params) for params in zip(args,amplitude,w,phase) )
+    
+    return np.fromfunction(f, shape, dtype=np.float32)
+
+def generate_locationmap_target(segmentation, location_map):
+    '''generate target having instance wise mean intensity of location_map loss:
+    
+    output channels:
+    ---------
+    0: instance normalization
+    1: instance wise mean of location_map
+    '''
+
+    normalization = np.zeros_like(segmentation, dtype=np.float32)
+    n_labels = 0
+    for label in np.unique(segmentation):
+        # ~ if label > 0: # BACKGROUND INCLUDED !!!!!!!!!!!!!!!!
+        area = (segmentation==label).sum()
+        np.putmask(normalization, segmentation==label, 1./area)
+        n_labels += 1
+    
+    if n_labels > 1:        
+        normalization = normalization / n_labels
+        
+    location_map_mean = np.zeros_like(segmentation, dtype=np.float32)
+    for label in np.unique(segmentation):
+        if label > 0: 
+            indices = np.argwhere(segmentation==label)
+            vals = np.take(location_map, indices)
+            np.putmask(location_map_mean, segmentation==label, vals.mean())
+    
+    return np.stack([location_map_mean, normalization], axis=-1)
+
 def add_border_annotation(segmentation):
     '''Adds borders with label=-1 to an existing segmentation mask 
     '''
