@@ -11,8 +11,6 @@ def add_pixel_coordinates(embeddings, weight=0.001, sampling=1.0):
     stack weighted pixel coordinates with embeddings
     '''
     
-    print(sampling)
-    print(weight)
     ndim = len(embeddings.shape[:-1])
     if isinstance(sampling, (list,tuple)):
         if len(sampling) == 1:
