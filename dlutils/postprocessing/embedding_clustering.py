@@ -137,7 +137,7 @@ def cluster_embeddings_3D(embeddings, fg_mask, coordinate_weight=0.001, sampling
     for z in range(embeddings.shape[0]):
     
         if fg_mask[z].sum() > 0:
-            print('procssing slice: ', z)
+            # ~ print('processing slice: ', z)
             l,c = masked_HDBSCAN(embeddings[z], fg_mask[z])
             unique_l = np.unique(l)[1:]
             if len(unique_l) > 0:
