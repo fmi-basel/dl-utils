@@ -12,8 +12,10 @@ from dlutils.training.augmentations import ImageDataAugmentation
 from dlutils.training.generator import TrainingGenerator
 from dlutils.training.split import split
 from dlutils.training.targets import generate_separator_map
-from dlutils.training.targets import generate_distance_transform
-from dlutils.training.targets import add_border_annotation
+from dlutils.training.targets.distance_transform import generate_distance_transform, shrink_labels
+from dlutils.training.targets.seeds import generate_seed_map
+from dlutils.training.targets.location_map import generate_locationmap, generate_locationmap_target
+from dlutils.training.targets.normalization_mask import generate_normalization_mask
 
 from skimage.external.tifffile import imread
 
@@ -125,7 +127,7 @@ class InstanceSegmentationHandleWithSeparatorMultislice(
             patches[key] = patches[key][..., patch_size[-1] // 2][..., None]
         return patches
 
-
+import matplotlib.pyplot as plt
 class InstanceSegmentationHandleWithDistanceMap(LazyTrainingHandle):
     def get_input_keys(self):
         '''returns a list of input keys.
@@ -138,6 +140,8 @@ class InstanceSegmentationHandleWithDistanceMap(LazyTrainingHandle):
 
         '''
         return ['fg_pred', 'transform_pred', 'segmentation']
+        # ~ return ['transform_pred', 'segmentation']
+        # ~ return ['segmentation']
 
     def __init__(self, img_path, segm_path, patch_size, crop_margins, sampling):
         '''initializes handle with source paths and patch_size for sampling.
@@ -155,25 +159,40 @@ class InstanceSegmentationHandleWithDistanceMap(LazyTrainingHandle):
         if self.is_loaded():
             return
 
-        self['input'] = imread(self['img_path'])
+        self['input'] = imread(self['img_path']).astype(np.float32)
         self['input'] = standardize(self['input'], min_scale=50)
 
         segm = imread(self['segm_path']).astype(np.int, copy=False)
-        self['fg_pred'] = segm >= 1
+        self['fg_pred'] = segm>=1
+        self['fg_pred'] = np.stack([self['fg_pred'], generate_normalization_mask(self['fg_pred'], include_background=True)], axis=-1)
+
         
-        self['segmentation'] = add_border_annotation(segm)
+        self['transform_pred'] = shrink_labels(segm, sampling=self.sampling, distance_thresh=0.5)
+        # ~ self['segmentation'] = segm
+        # ~ self['segmentation'] = add_border_annotation(segm)
+        location_map = generate_locationmap(segm.shape, period=(11,110,110), offset=(0.,0.,0.))
+        self['segmentation'] = generate_locationmap_target(segm, location_map)
+        # ~ self['segmentation'] = generate_center_map(segm)
         
-        self['transform_pred'] = generate_distance_transform(segm, 
-                                                sampling=self.sampling,
-                                                sigma=0.0)
-        if self.crop_margins is not None:    
-            self['input'], self['fg_pred'], self['transform_pred'], self['segmentation'] \
-                                    = crop_object([self['input'], 
-                                                   self['fg_pred'],
-                                                   self['transform_pred'],
-                                                   self['segmentation']],
-                                                   self['fg_pred'],
-                                                   margins=self.crop_margins)
+        # ~ self['transform_pred'] = generate_distance_transform(segm, 
+                                                # ~ sampling=self.sampling,
+                                                # ~ sigma=0.0)
+        # ~ self['transform_pred'] = generate_seed_map(segm,
+                                                    # ~ sampling=self.sampling,)
+                                                
+        # add location map to input
+        # ~ self['input'] = np.stack([self['input'], location_map], axis=-1)
+        self['input'] = np.expand_dims(self['input'], axis=-1)
+        self['input'] = np.concatenate([self['input'], location_map], axis=-1)
+        
+        # ~ if self.crop_margins is not None:    
+            # ~ self['input'], self['fg_pred'], self['transform_pred'], self['segmentation'] \
+                                    # ~ = crop_object([self['input'], 
+                                                   # ~ self['fg_pred'],
+                                                   # ~ self['transform_pred'],
+                                                   # ~ self['segmentation']],
+                                                   # ~ self['fg_pred'],
+                                                   # ~ margins=self.crop_margins)
                                                                       
         # add flat channel if needed
         for key in self.get_input_keys() + self.get_output_keys():
