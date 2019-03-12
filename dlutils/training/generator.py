@@ -148,9 +148,6 @@ class TrainingGenerator(Sequence):
         for key in outputs.keys():
             if not isinstance(outputs[key], np.ndarray):
                 outputs[key] = np.asarray(outputs[key])
-                
-        # ~ for key in inputs.keys():
-            # ~ print(key, inputs[key].shape)
             
         return inputs, outputs
 
