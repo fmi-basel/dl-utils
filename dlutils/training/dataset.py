@@ -38,7 +38,7 @@ class BinarySegmentationHandle(LazyTrainingHandle):
         '''
         self['img_path'] = img_path
         self['segm_path'] = segm_path
-        self.patch_size = patch_size
+        self.patch_size = patch_sizse
 
     def load(self):
         '''actually loads data.
@@ -127,8 +127,8 @@ class InstanceSegmentationHandleWithSeparatorMultislice(
             patches[key] = patches[key][..., patch_size[-1] // 2][..., None]
         return patches
 
-import matplotlib.pyplot as plt
-class InstanceSegmentationHandleWithDistanceMap(LazyTrainingHandle):
+
+class InstanceSegmentationHandleWithLocationMap(LazyTrainingHandle):
     def get_input_keys(self):
         '''returns a list of input keys.
 
@@ -139,11 +139,9 @@ class InstanceSegmentationHandleWithDistanceMap(LazyTrainingHandle):
         '''returns a list of output keys.
 
         '''
-        return ['fg_pred', 'transform_pred', 'segmentation']
-        # ~ return ['transform_pred', 'segmentation']
-        # ~ return ['segmentation']
+        return ['fg_pred', 'segmentation']
 
-    def __init__(self, img_path, segm_path, patch_size, crop_margins, sampling):
+    def __init__(self, img_path, segm_path, patch_size, sampling, locationmap_params, *args, **kwargs):
         '''initializes handle with source paths and patch_size for sampling.
 
         '''
@@ -151,7 +149,10 @@ class InstanceSegmentationHandleWithDistanceMap(LazyTrainingHandle):
         self['segm_path'] = segm_path
         self.patch_size = patch_size
         self.sampling = sampling
-        self.crop_margins = crop_margins
+
+        ndim = len(patch_size)
+        self.period_bounds = np.broadcast_to(np.asarray(locationmap_params['period_bounds']), (ndim,2))
+        self.offset_bounds = np.broadcast_to(np.asarray(locationmap_params['offset_bounds']), (ndim,2))
 
     def load(self):
         '''
@@ -161,81 +162,48 @@ class InstanceSegmentationHandleWithDistanceMap(LazyTrainingHandle):
 
         self['input'] = imread(self['img_path']).astype(np.float32)
         self['input'] = standardize(self['input'], min_scale=50)
+        location_map = generate_locationmap(self['input'].shape) # will be replaced during patch sampling
+        self['input'] = np.expand_dims(self['input'], axis=-1)
+        self['input'] = np.concatenate([self['input'], location_map], axis=-1)
 
         segm = imread(self['segm_path']).astype(np.int, copy=False)
         self['fg_pred'] = segm>=1
-        self['fg_pred'] = np.stack([self['fg_pred'], generate_normalization_mask(self['fg_pred'], include_background=True)], axis=-1)
-
+        norm_mask = generate_normalization_mask(self['fg_pred'], include_background=True)
+        self['fg_pred'] = np.stack([self['fg_pred'], norm_mask], axis=-1)
         
-        self['transform_pred'] = shrink_labels(segm, sampling=self.sampling, distance_thresh=0.5)
-        # ~ self['segmentation'] = segm
-        # ~ self['segmentation'] = add_border_annotation(segm)
-        location_map = generate_locationmap(segm.shape, period=(11,110,110), offset=(0.,0.,0.))
-        self['segmentation'] = generate_locationmap_target(segm, location_map)
-        # ~ self['segmentation'] = generate_center_map(segm)
-        
-        # ~ self['transform_pred'] = generate_distance_transform(segm, 
-                                                # ~ sampling=self.sampling,
-                                                # ~ sigma=0.0)
-        # ~ self['transform_pred'] = generate_seed_map(segm,
-                                                    # ~ sampling=self.sampling,)
-                                                
-        # add location map to input
-        # ~ self['input'] = np.stack([self['input'], location_map], axis=-1)
-        self['input'] = np.expand_dims(self['input'], axis=-1)
-        self['input'] = np.concatenate([self['input'], location_map], axis=-1)
-        
-        # ~ if self.crop_margins is not None:    
-            # ~ self['input'], self['fg_pred'], self['transform_pred'], self['segmentation'] \
-                                    # ~ = crop_object([self['input'], 
-                                                   # ~ self['fg_pred'],
-                                                   # ~ self['transform_pred'],
-                                                   # ~ self['segmentation']],
-                                                   # ~ self['fg_pred'],
-                                                   # ~ margins=self.crop_margins)
+        self['segmentation'] = segm
                                                                       
         # add flat channel if needed
         for key in self.get_input_keys() + self.get_output_keys():
             if self[key].ndim == len(self.patch_size):
                 self[key] = self[key][..., None]
-            
-class InstanceSegmentationHandleWithDistanceMapMultislice(
-        InstanceSegmentationHandleWithDistanceMap):
-    def load(self):
-        '''
-        '''
-        if self.is_loaded():
-            return
-        super(InstanceSegmentationHandleWithDistanceMapMultislice, self).load()
-
-        # move Z axis to third position and
-        # we probably have to remove the flat dimension at the end.
-        for key in self.get_input_keys() + self.get_output_keys():
-            if self[key].shape[-1] == 1:
-                self[key] = np.squeeze(self[key], axis=-1)
-            self[key] = np.moveaxis(self[key], 0, 2)
-
+        
     def get_random_patch(self, patch_size, *args, **kwargs):
         '''
         '''
-        patches = super(InstanceSegmentationHandleWithDistanceMapMultislice,
+    
+        patches = super(InstanceSegmentationHandleWithLocationMap,
                         self).get_random_patch(patch_size, *args, **kwargs)
 
-        # subselect middle plane of outputs
-        for key in self.get_output_keys():
-            patches[key] = patches[key][:,:, patch_size[-1] // 2]
-            if patches[key].ndim < len(self.patch_size):
-                patches[key] = patches[key][..., None]
+        # compute/randomize location map and corresponding target
+        period = [np.random.uniform(*bound) for bound in self.period_bounds]
+        offset = [np.random.uniform(*bound) for bound in self.offset_bounds]
+        
+        patches['input'][...,1:] = generate_locationmap(patches['input'][...,0].shape, period=period, offset=offset)
+        patches['input'] = np.ascontiguousarray(patches['input'])
+        
+        patches['segmentation'] = generate_locationmap_target(patches['segmentation'][...,0], patches['input'][...,1:])
+        patches['segmentation'] = np.ascontiguousarray(patches['segmentation'])
             
         return patches
+        
 
 def prepare_dataset(path_pairs,
                     task_type,
                     patch_size,
                     split_ratio=0.2,
                     augmentation_params=None,
-                    crop_margins=None,
-                    sampling=None,
+                    task_params=None,
                     **config_params):
     '''create a generator for training samples and validation samples.
 
@@ -251,10 +219,8 @@ def prepare_dataset(path_pairs,
         Handle = BinarySegmentationHandle
     elif task_type == 'instance_segmentation':
         Handle = InstanceSegmentationHandleWithSeparator
-    elif task_type == 'instance_segmentation_distance_map':
-        Handle = InstanceSegmentationHandleWithDistanceMap
-    elif task_type == 'instance_segmentation_distance_map_multislice':
-        Handle = InstanceSegmentationHandleWithDistanceMapMultislice
+    elif task_type == 'instance_segmentation_location_map':
+        Handle = InstanceSegmentationHandleWithLocationMap
     else:
         raise ValueError('Unknown task_type: {}'.format(task_type))
 
@@ -268,8 +234,7 @@ def prepare_dataset(path_pairs,
 
     train_handles, validation_handles = split(
         [Handle(*paths, patch_size=patch_size,
-                crop_margins=crop_margins,
-                sampling=sampling) for paths in path_pairs],
+                **task_params) for paths in path_pairs],
             split_ratio,
             stratify=stratify)
 
