@@ -21,6 +21,7 @@ class StitchingGenerator(Sequence):
         self.batch_size = batch_size
         self.patch_size = patch_size
         self.border = border if batch_size is not None else 1
+        self.border = np.broadcast_to( np.asarray(self.border), len(patch_size))
         self.calc_corners()
 
     def __len__(self):
@@ -64,7 +65,7 @@ class StitchingGenerator(Sequence):
         # ignore last dim (channels)
         flat_indices = [self._grid_points(self.image.shape[dim], 
                                           self.patch_size[dim],
-                                          self.border)
+                                          self.border[dim])
                         for dim in range(self.image.ndim-1)]
         self.corners = list(product(*flat_indices))
 
@@ -83,6 +84,8 @@ def predict_complete(model, image, batch_size=None, patch_size=None,
         raise RuntimeError('Couldnt determine batch_size!')
     if patch_size is None:
         raise RuntimeError('Couldnt determine patch_size!')
+        
+    border = np.broadcast_to( np.asarray(border), len(patch_size))
 
     # add "flat" channel if necessary
     if n_channels == 1 and image.shape[-1] != 1:
@@ -101,11 +104,11 @@ def predict_complete(model, image, batch_size=None, patch_size=None,
     # check if the patch_size fits within image.shape
     diff_shape = [max(x - y, 0) for x, y in zip(patch_size, image.shape)]
 
-    if border > 0 or any(val > 0 for val in diff_shape):
+    if any(border) > 0 or any(val > 0 for val in diff_shape):
         pad_width = [(
-            border + dx // 2,
-            border + dx // 2 + dx % 2,
-        ) for idx, dx in enumerate(diff_shape)] + [
+            b + dx // 2,
+            b + dx // 2 + dx % 2,
+        ) for b, dx in zip(border, diff_shape)] + [
             (0, 0),
         ]
         image = np.pad(image, pad_width=pad_width, mode='symmetric')
@@ -139,25 +142,22 @@ def predict_complete(model, image, batch_size=None, patch_size=None,
 
         # re-assemble
         for idx, coord in enumerate(coord_batch):
-            slices = tuple([
-                slice(x + border, x + dx - border)
-                for x, dx in zip(coord, patch_size)
-            ])
+            slices = tuple(
+                slice(x + b, x + dx - b)
+                for b, x, dx in zip(border, coord, patch_size)
+            )
 
             for key, pred in zip(model.output_names, pred_batch):
 
-                border_slices = tuple([
-                    slice(border, -border) for _ in range(pred[idx].ndim - 1)
-                ])
-
+                border_slices = tuple(slice(b, -b) for b in border)
                 # TODO implement smooth stitching.
                 responses[key][slices] = pred[idx][border_slices]
 
-    if border > 0 or any(np.asarray(diff_shape) > 0):
+    if any(border) > 0 or any(np.asarray(diff_shape) > 0):
 
         slices = tuple([
-            slice(border + dx // 2, -(border + dx // 2 + dx % 2))
-            for dx in diff_shape
+            slice(b + dx // 2, -(b + dx // 2 + dx % 2))
+            for b, dx in zip(border,diff_shape)
         ])
 
         for key, val in responses.items():
