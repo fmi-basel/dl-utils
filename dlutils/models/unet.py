@@ -1,9 +1,4 @@
-from __future__ import absolute_import
-from __future__ import division
-from __future__ import print_function
-from __future__ import unicode_literals
-from builtins import range
-
+from keras.engine.topology import get_source_inputs
 
 from keras.engine import Input
 from keras.engine import Model
@@ -11,177 +6,171 @@ from keras.layers import Convolution2D
 from keras.layers import MaxPooling2D
 from keras.layers import Deconvolution2D
 from keras.layers import Dropout
-from keras.layers import concatenate
-from keras.layers import Cropping2D
 from keras.layers import BatchNormalization
-from keras.engine.topology import get_source_inputs
+from keras.layers import concatenate
 
-import logging
+from dlutils.layers.padding import DynamicPaddingLayer, DynamicTrimmingLayer
 
 
-def get_model_name(cardinality, n_levels, dropout, with_bn, *args, **kwargs):
-    name = 'UNet-{}-{}'.format(cardinality, n_levels)
+def get_model_name(width, n_levels, dropout, with_bn, *args, **kwargs):
+    '''
+    '''
+    name = 'UNet-{}-{}'.format(width, n_levels)
     if with_bn:
         name += '-BN'
     if dropout is not None:
         name += '-D{}'.format(dropout)
-
-    logger = logging.getLogger(__name__)
-    if len(args) >= 1:
-        logger.warning('Unused parameters in get_model_name: {}'.format(args))
-    if len(kwargs) >= 1:
-        logger.warning('Unused parameters in get_model_name: {}'.format(kwargs))
     return name
 
 
-def UnetBase(input_shape=None,
-             input_tensor=None,
-             batch_size=None,
-             weight_file=None,
-             dropout=None,
-             with_bn=False,
-             cardinality=1,
-             n_levels=5):
-    '''construct a basic U-Net without any output layer.
+def unet_block(base_features, n_levels, n_blocks_per_level, dropout,
+               base_block, **block_kwargs):
+    '''
+    '''
 
-    TODO describe parameters.
+    block_params = dict(padding='same', activation='relu')
+    block_params.update(block_kwargs)
+
+    pooling = MaxPooling2D
+    upsampling = Deconvolution2D
+
+    def features_from_level(level):
+        features_out = base_features * 2**level
+        return features_out
+
+    def _get_name(prefix, level, suffix):
+        return '{prefix}_L{level:02}_{suffix}'.format(
+            prefix=prefix, level=level, suffix=suffix)
+
+    def block(input_tensor):
+        '''
+        '''
+        links = []
+
+        x = input_tensor
+
+        # contracting path.
+        prefix = 'CB'
+        for level in range(n_levels - 1):
+            for count in range(n_blocks_per_level):
+                x = base_block(
+                    filters=features_from_level(level),
+                    name=_get_name(prefix, level, 'C%d' % count),
+                    **block_params)(x)
+
+            if dropout > 0.:
+                x = Dropout(dropout, name=_get_name(prefix, level, 'DROP'))(x)
+
+            links.append(x)
+            x = pooling(2, name=_get_name(prefix, level, 'MP'))(x)
+
+        # compressed representation
+        for count in range(n_blocks_per_level):
+            x = base_block(
+                filters=features_from_level(n_levels - 1),
+                name=_get_name(prefix, n_levels - 1, 'C%d' % count),
+                **block_params)(x)
+
+        if dropout > 0.:
+            x = Dropout(
+                dropout, name=_get_name(prefix, n_levels - 1, 'DROP'))(x)
+
+        # expanding path.
+        prefix = 'EB'
+        for level in reversed(range(n_levels - 1)):
+            x = upsampling(
+                filters=features_from_level(level),
+                strides=2,
+                kernel_size=2,
+                name=_get_name(prefix, level, 'DC'))(x)
+            x = concatenate(
+                [x, links[level]], name=_get_name(prefix, level, 'CONC'))
+
+            for count in range(n_blocks_per_level):
+                x = base_block(
+                    filters=features_from_level(level),
+                    name=_get_name(prefix, level, 'C%d' % (count + 1)),
+                    **block_params)(x)
+
+            if dropout > 0.:
+                x = Dropout(dropout, name=_get_name(prefix, level, 'DROP'))(x)
+        return x
+
+    return block
+
+
+def ConvolutionWithBatchNorm(name,
+                             conv=Convolution2D,
+                             activation='relu',
+                             **conv_kwargs):
+    '''
+    '''
+
+    def block(input_tensor):
+        x = conv(**conv_kwargs, name=name + '_cnv')(input_tensor)
+        x = BatchNormalization(name=name + '_bn')(x)
+        return x
+
+    return block
+
+
+def GenericUnetBase(input_shape=None,
+                    input_tensor=None,
+                    batch_size=None,
+                    dropout=None,
+                    with_bn=False,
+                    width=1,
+                    n_levels=5,
+                    n_blocks=2):
+    '''Constructs a basic U-Net.
+
+    Based on: Ronneberger et al. "U-Net: Convolutional Networks for
+    BiomedicalImage Segmentation", MICCAI 2015
 
     '''
-    logger = logging.getLogger(__name__)
-
-    conv_params = dict(kernel_size=(3, 3), padding='same', activation='relu')
-
-    if dropout == 0.:  # disable dropout if zero.
-        dropout = None
-
-    if dropout is not None:
-        assert 0. < dropout < 1.0, \
-            'Dropout has to be within 0. and 1.'
-
-    assert 1 / 64. < cardinality, \
-        'cardinality has to be larger than 1 / 64'
-
-    assert 1 <= n_levels, \
-        'n_levels has to be larger than 0'
-
-    def contracting_block(x, n_features, level):
-        '''constrcut the default block of a UNet.
-        '''
-        base_name = 'CB_L{:02}'.format(level)
-        x = Convolution2D(n_features, name=base_name + '_C0', **conv_params)(x)
-        if with_bn:
-            x = BatchNormalization(name=base_name + '_BN0')(x)
-        x = Convolution2D(n_features, name=base_name + '_C1', **conv_params)(x)
-        if with_bn:
-            x = BatchNormalization(name=base_name + '_BN1')(x)
-
-        if dropout is not None:
-            x = Dropout(dropout, name=base_name + '_DROP')(x)
-        return x
-
-    def get_crop_shape(x_shape, y_shape):
-        '''determine crop delta for a concatenation.
-
-        NOTE Assumes that y is larger than x.
-        '''
-        assert len(x_shape) == len(y_shape)
-        assert len(x_shape) >= 2
-        shape = []
-
-        for xx, yy in zip(x_shape, y_shape):
-            delta = yy - xx
-            if delta % 2 == 1:
-                shape.append((int(delta / 2), int(delta / 2) + 1))
-            else:
-                shape.append((int(delta / 2), int(delta / 2)))
-        return shape
-
-    def expanding_block(x, y, n_features, level):
-        '''construct the default expanding block
-        '''
-        base_name = 'EB_L{:02}'.format(level)
-
-        x_shape = (2 * x.get_shape()[1].value, 2 * x.get_shape()[2].value)
-        x = Deconvolution2D(
-            n_features,
-            kernel_size=2,
-            strides=2,
-            name=base_name + '_DC',
-            padding=conv_params['padding'])(x)
-        if with_bn:
-            x = BatchNormalization(name=base_name + '_BN0')(x)
-
-        # Ensure both channels have the same shape
-        x = Cropping2D(
-            cropping=get_crop_shape(
-                [y.get_shape()[idx].value for idx in range(1, 3)], x_shape),
-            name=base_name + '_CRP')(x)
-
-        # Concatenate with corresponding level
-        x = concatenate([x, y], axis=3, name=base_name + '_CONC')
-        for ii in range(1, 3):
-            x = Convolution2D(
-                n_features, name=base_name + '_C{}'.format(ii),
-                **conv_params)(x)
-            if with_bn:
-                x = BatchNormalization(name=base_name + '_BN{}'.format(ii))(x)
-
-        return x
+    base_features = int(width * 64)
 
     # Assemble input
+    # NOTE we use flexible sized inputs per default.
     if input_tensor is None:
         img_input = Input(
-            batch_shape=(batch_size, ) + input_shape, name='input')
+            batch_shape=(batch_size, ) + (None, None, input_shape[-1]),
+            name='input')
     else:
         img_input = input_tensor
 
-    # width of first feature map.
-    n_features_basic = int(64 * cardinality)
+    x = DynamicPaddingLayer(factor=2**n_levels, name='dpad')(img_input)
 
-    x = img_input
-    cb_out = [
-        None,
-    ] * n_levels
+    if with_bn:
+        base_block = ConvolutionWithBatchNorm
+    else:
+        base_block = Convolution2D
 
-    # build contracting path
-    for level, n_features in ((level, n_features_basic * (2**level))
-                              for level in range(n_levels)):
+    x = unet_block(
+        dropout=dropout,
+        n_levels=n_levels,
+        base_features=base_features,
+        n_blocks_per_level=n_blocks,
+        base_block=base_block,
+        kernel_size=3)(x)
 
-        cb_out[level] = contracting_block(
-            x, n_features=n_features, level=level)
-        x = cb_out[level]
+    x = DynamicTrimmingLayer(name='dtrim')([img_input, x])
 
-        if level < n_levels - 1:  # dont add pooling for the very lowest layer!
-            x = MaxPooling2D(
-                padding='same', name='CB_L{:02}_MP'.format(level))(x)
-
-    # input layer to expanding path
-    x = cb_out[-1]
-
-    # build expanding path
-    for level, n_features in ((level, n_features_basic * (2**level))
-                              for level in range(n_levels - 2, -1, -1)):
-        x = expanding_block(
-            x, cb_out[level], n_features=n_features, level=level)
-
-    # handle the case where input_tensor are other layers.
     if input_tensor is not None:
         inputs = get_source_inputs(input_tensor)
     else:
         inputs = img_input
 
-    model = Model(
-        inputs,
-        x,
-        name=get_model_name(cardinality, n_levels, dropout, with_bn))
-
-    if weight_file is not None:
-        # TODO replace with logger
-        logger.info('Loading weights from :{}'.format(weight_file))
-        model.load_weights(weight_file)
-
-    return model
+    return Model(
+        inputs=inputs,
+        outputs=x,
+        name=get_model_name(
+            width=width,
+            n_levels=n_levels,
+            n_blocks=n_blocks,
+            dropout=dropout,
+            with_bn=False))
 
 
-if __name__ == '__main__':
-    pass
+# for backwards compatibility
+UnetBase = GenericUnetBase

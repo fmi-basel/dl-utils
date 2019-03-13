@@ -1,4 +1,4 @@
-from dlutils.models.unet import UnetBase
+from dlutils.models.unet import GenericUnetBase
 from dlutils.models.heads import add_fcn_output_layers
 
 from itertools import product
@@ -17,28 +17,31 @@ def cleanup():
 
 
 @pytest.mark.parametrize(
-    "input_shape,cardinality,n_levels,with_bn,dropout",
+    "input_shape,width,n_levels,dropout,with_bn",
     list(
         product(
             [
                 (259, 297, 1),
             ],  # input shapes
-            [0.3, 1, 2],  # cardinality
-            [2, 5, ],  # n_levels
-            [True, False],  # with_bn
+            [0.3, 1, 2],  # width
+            [
+                2,
+                5,
+            ],  # n_levels
             [0, 0.5],  # dropout
+            [False, True]  # with_bn
         )))
-def test_unet_setup(input_shape, cardinality, n_levels, with_bn, dropout):
+def test_unet_setup(input_shape, width, n_levels, dropout, with_bn):
     '''
     '''
     batch_size = 3
 
-    model = UnetBase(
+    model = GenericUnetBase(
         input_shape=input_shape,
-        cardinality=cardinality,
+        width=width,
         n_levels=n_levels,
-        with_bn=with_bn,
-        dropout=dropout)
+        dropout=dropout,
+        with_bn=with_bn)
 
     pred_names = ['pred_cell', 'pred_border']
     model = add_fcn_output_layers(model, pred_names, [1, 1])

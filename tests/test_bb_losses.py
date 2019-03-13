@@ -47,4 +47,5 @@ def test_focal(alpha, gamma):
 
 
 if __name__ == '__main__':
-    test_focal()
+    test_focal(0.1, 0.5)
+    test_smooth_l1(0.5)

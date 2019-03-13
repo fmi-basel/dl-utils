@@ -60,7 +60,7 @@ def add_aspp_output_layers(model,
         ]
 
     x = aspp_block(
-        last_layer, num_filters=filters, rate_scale=rate, n_levels=n_levels,
+        last_layer, num_features=filters, rate_scale=rate, n_levels=n_levels,
         with_bn=False)
 
     target_shape = model.input_shape
