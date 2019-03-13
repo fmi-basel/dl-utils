@@ -10,7 +10,7 @@ import pytest
 
 
 def test_weighted_l1_loss():
-    '''TODO make this a proper test.
+    '''
     '''
     y_true = layers.Input(shape=(None,6,))
     y_pred = layers.Input(shape=(None,5,))
@@ -31,7 +31,7 @@ def test_weighted_l1_loss():
     np.testing.assert_almost_equal(loss_tf, loss_np)
     
 def test_weighted_l2_loss():
-    '''TODO make this a proper test.
+    '''
     '''
     y_true = layers.Input(shape=(None,6,))
     y_pred = layers.Input(shape=(None,5,))
@@ -53,7 +53,7 @@ def test_weighted_l2_loss():
 
 
 def test_weighted_binary_crossentropy_loss():
-    '''TODO make this a proper test.
+    '''
     '''
     y_true = layers.Input(shape=(None,6,))
     y_pred = layers.Input(shape=(None,5,))
