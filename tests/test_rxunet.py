@@ -44,6 +44,7 @@ def test_setup(input_shape, width, cardinality, n_levels, with_bn, dropout):
 
     model = GenericRxUnetBase(
         input_shape=(None, None, input_shape[2]),
+        width=width,
         cardinality=cardinality,
         n_levels=n_levels,
         with_bn=with_bn,
