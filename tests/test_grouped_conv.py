@@ -7,7 +7,7 @@ from keras.models import Model
 from keras import optimizers
 from dlutils.models import load_model
 
-from dlutils.layers.grouped_conv import GroupedConv2D
+from dlutils.layers.grouped_conv import GroupedConv2D, GroupedConv3D
 
 from scipy.ndimage.filters import gaussian_filter
 
@@ -25,16 +25,19 @@ def cleanup():
     clear_session()
 
 
-@pytest.mark.parametrize("patch_size, in_features, out_features, cardinality",
-                         [[(100, 50), 10, 8, 2], [(32, 37), 8, 4, 4]])
-def test_layer(patch_size, in_features, out_features, cardinality):
+@pytest.mark.parametrize("conv_fct, patch_size, in_features, out_features, cardinality",
+                         [[GroupedConv2D, (100, 50), 10, 8, 2], 
+                          [GroupedConv2D, (32, 37), 8, 4, 4],
+                          [GroupedConv3D, (100, 50, 48), 10, 8, 2], 
+                          [GroupedConv3D, (32, 37, 11), 8, 4, 4],])
+def test_layer(conv_fct, patch_size, in_features, out_features, cardinality):
     '''
     '''
     input_shape = patch_size + (in_features, )
 
     input_layer = Input(input_shape)
-    output = GroupedConv2D(
-        out_features, kernel_size=(3, 3), cardinality=cardinality)(input_layer)
+    output = conv_fct(
+        out_features, kernel_size=(3), cardinality=cardinality)(input_layer)
     model = Model(inputs=input_layer, outputs=output)
 
     optimizer = optimizers.get('sgd')
@@ -55,22 +58,25 @@ def test_layer(patch_size, in_features, out_features, cardinality):
     assert pred.shape[-1] == out_features
 
 
-@pytest.mark.parametrize("patch_size, cardinality, strides",
-                         [[(100, 50), 2, 2], [(33, 39), 4, 3]])
-def test_layer_strided(patch_size, cardinality, strides):
+@pytest.mark.parametrize("conv_fct, patch_size, cardinality, strides",
+                         [[GroupedConv2D, (100, 50), 2, 2], 
+                          [GroupedConv2D, (33, 39), 4, 3],
+                          [GroupedConv3D, (100, 50, 48), 2, 2], 
+                          [GroupedConv3D, (33, 39, 39), 4, 3],])
+def test_layer_strided(conv_fct, patch_size, cardinality, strides):
     '''
     '''
     in_features = 8
     out_features = 4
     input_shape = patch_size + (in_features, )
     training_size = 10
-    target_shape = (training_size, input_shape[0] // strides,
-                    input_shape[1] // strides, out_features)
+                    
+    target_shape = (training_size,) + tuple(s//strides for s in patch_size) + (out_features,)
 
     input_layer = Input(input_shape)
-    output = GroupedConv2D(
+    output = conv_fct(
         out_features,
-        kernel_size=(3, 3),
+        kernel_size=(3),
         cardinality=cardinality,
         strides=strides,
         padding='same')(input_layer)
@@ -94,15 +100,17 @@ def test_layer_strided(patch_size, cardinality, strides):
     assert all(x == y for x, y in zip(pred.shape, target_shape))
 
 
-def test_layer_save():
+@pytest.mark.parametrize("conv_fct, input_shape",
+                         [[GroupedConv2D, (200, 200, 40)], 
+                          [GroupedConv3D, (30, 200, 200, 40)]])
+def test_layer_save(conv_fct, input_shape):
     '''
     '''
-    input_shape = (200, 200, 40)
     cardinality = 10
     out_features = 20
     input_layer = Input(input_shape)
-    output = GroupedConv2D(
-        out_features, kernel_size=(3, 3), cardinality=cardinality)(input_layer)
+    output = conv_fct(
+        out_features, kernel_size=(3), cardinality=cardinality)(input_layer)
     model = Model(inputs=input_layer, outputs=output)
     model.compile('sgd', loss='mae')
 
