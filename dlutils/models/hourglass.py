@@ -6,8 +6,6 @@
 # somehow change layer naming for 3D? 3x3 --> 3x3x3
 # add options to downscale input
 # intermediate supervision
-# groupdfilter for 3D
-# 3D augment?
 
 from __future__ import absolute_import
 from __future__ import division
@@ -30,7 +28,7 @@ from keras.layers import Dropout
 
 from keras.backend import get_uid
 
-from dlutils.layers.grouped_conv import GroupedConv2D
+from dlutils.layers.grouped_conv import GroupedConv2D, GroupedConv3D
 from dlutils.layers.padding import DynamicPaddingLayer
 from dlutils.layers.padding import DynamicTrimmingLayer
 
@@ -60,9 +58,7 @@ def bottleneck_conv_block(n_features,
     # conv layer definitions.
     if dim_3D:
         Conv = Conv3D
-        if cardinality != 1:
-            raise NotImplementedError('3D version of GroupedConv not implemented')
-        #GroupedConv = GroupedConv3D
+        GroupedConv = GroupedConv3D
     else:
         Conv = Conv2D
         GroupedConv = GroupedConv2D
@@ -101,6 +97,11 @@ def bottleneck_conv_block(n_features,
                 kernel_size=(3),
                 name=get_unique_layer_name('c3x3'),
                 **conv_kwargs)(x)
+            
+            # ~ # TODO test separable conv    
+            # ~ x = Conv(n_features//2, kernel_size=(3,1,1), name=get_unique_layer_name('c3x3'), **conv_kwargs)(x)
+            # ~ x = Conv(n_features//2, kernel_size=(1,3,1), name=get_unique_layer_name('c3x3'), **conv_kwargs)(x)
+            # ~ x = Conv(n_features//2, kernel_size=(1,1,3), name=get_unique_layer_name('c3x3'), **conv_kwargs)(x)
         else:
             x = GroupedConv(
                 n_features//2,
@@ -248,6 +249,7 @@ def input_block(n_features, n_levels, cardinality, with_bn, dropout, dim_3D=Fals
         # ~ x = Activation('relu', name=get_unique_layer_name('relu'))(x)
         # ~ x = bottleneck_conv_block(n_features, **block_params)(x)
         # ~ x = pooling(2, name=get_unique_layer_name('down2'))(x)
+        
         # alternatively don't downscale, simply change the number of channels to n_features
         x = DynamicPaddingLayer(factor=2**n_levels, ndim=ndim, name='dpad')(x)
         x = Conv(
@@ -301,7 +303,7 @@ def GenericHourglassBase(input_shape=None,
     except additions are replaced by concatenations followed by 1x1 conv 
     to reduce the number of channels by half
     '''
-    n_features = int(width * 16)
+    n_features = int(width * 32)
     if len(input_shape) == 4:
         dim_3D = True
         ndim = 5
@@ -336,7 +338,7 @@ def GenericHourglassBase(input_shape=None,
         dropout=dropout,
         dim_3D=dim_3D)(img_input)
     
-    # TODO implement intermediate module and recover outputs after each hourglass for supervision
+    # TODO implement intermediate module and recover outputs after each hourglass for intermediate supervision
     x = hourglass_stack(
         dropout=dropout,
         with_bn=with_bn,

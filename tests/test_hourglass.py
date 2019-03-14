@@ -30,12 +30,12 @@ def cleanup():
                 (128,128,128, 1),
                 (137,164,98, 1),
             ],  # input shapes
-            [1, 2, 4], #1, 2],  # width
+            [1, 2],  # width
             [1, 4],  # cardinality
             [1, 2], # n_stacks
             [1,4],  # n_levels
             [True, False],  # with_bn
-            [0.5, ] #0.5],  # dropout
+            [0.5, ] ,  # dropout
         )))
 def test_setup(input_shape, width, cardinality, n_stacks, n_levels, with_bn, dropout):
     '''
@@ -44,6 +44,7 @@ def test_setup(input_shape, width, cardinality, n_stacks, n_levels, with_bn, dro
 
     model = GenericHourglassBase(
         input_shape=tuple(None for _ in range(len(input_shape)-1)) + (input_shape[-1],),
+        width=width,
         cardinality=cardinality,
         n_stacks=n_stacks,
         n_levels=n_levels,
@@ -72,4 +73,6 @@ def test_setup(input_shape, width, cardinality, n_stacks, n_levels, with_bn, dro
 
 
 if __name__ == '__main__':
-    test_setup((310, 199, 1), 1, 1, 2, 3, True, 0.5)
+    # ~ test_setup((128, 128, 128, 1), 1, 4, 2, 4, True, 0.5)
+    test_setup((128,128,128, 1), 1, 4, 1, 1, False, 0.5)
+    
