@@ -19,25 +19,43 @@ def cleanup():
     from keras.backend import clear_session
     clear_session()
 
-
-@pytest.mark.parametrize(
-    "input_shape,width,cardinality,n_stacks,n_levels,with_bn,dropout",
-    list(
+params_isotropic = list(
         product(
             [
                 (256, 256, 3),
                 (310, 199, 1),
-                (128,128,128, 1),
-                (137,164,98, 1),
+                (64,64,64, 1),
+                (69,22,98, 1),
             ],  # input shapes
-            [1, 2],  # width
+            [1, 0.5],  # width
             [1, 4],  # cardinality
             [1, 2], # n_stacks
             [1,4],  # n_levels
             [True, False],  # with_bn
+            [False],
             [0.5, ] ,  # dropout
-        )))
-def test_setup(input_shape, width, cardinality, n_stacks, n_levels, with_bn, dropout):
+        ))
+        
+params_anisotropic = list(
+        product(
+            [
+                (69,22,98, 1),
+            ],  # input shapes
+            [1, 0.5],  # width
+            [1, 4],  # cardinality
+            [1, 2], # n_stacks
+            [1,4],  # n_levels
+            [True, False],  # with_bn
+            [True],
+            [0.0, ] ,  # dropout
+        ))
+
+
+@pytest.mark.parametrize(
+    "input_shape,width,cardinality,n_stacks,n_levels,with_bn,anisotropic,dropout",
+    params_isotropic + params_anisotropic
+    )
+def test_setup(input_shape, width, cardinality, n_stacks, n_levels, with_bn, anisotropic, dropout):
     '''
     '''
     batch_size = 3
@@ -49,6 +67,7 @@ def test_setup(input_shape, width, cardinality, n_stacks, n_levels, with_bn, dro
         n_stacks=n_stacks,
         n_levels=n_levels,
         with_bn=with_bn,
+        anisotropic=anisotropic,
         dropout=dropout)
 
     pred_names = ['pred_cell', 'pred_border']
@@ -73,6 +92,5 @@ def test_setup(input_shape, width, cardinality, n_stacks, n_levels, with_bn, dro
 
 
 if __name__ == '__main__':
-    # ~ test_setup((128, 128, 128, 1), 1, 4, 2, 4, True, 0.5)
-    test_setup((128,128,128, 1), 1, 4, 1, 1, False, 0.5)
+    test_setup((64,64,64, 1), 1, 4, 1, 1, False, True, 0.5)
     

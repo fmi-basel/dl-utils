@@ -146,7 +146,7 @@ def hourglass_block(n_features, n_levels, n_blocks_per_level, cardinality,
         upsampling = UpSampling2D
         Conv = Conv2D
     if anisotropic:
-        size_factor=(1,2,2)
+        size_factor=(1,2,2)# TODO downsample every x levels to roughly compensate for lower z sampling
     else:
         size_factor=(2)
     
