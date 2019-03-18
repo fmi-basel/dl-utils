@@ -41,7 +41,6 @@ def train(dataset,
     '''
     logger = logging.getLogger(__name__)
 
-
     if learning_rate is None:
         learning_rate = estimate_learning_rate(model_constructor,
                                                dataset['training'])

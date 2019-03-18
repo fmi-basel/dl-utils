@@ -21,6 +21,7 @@ from skimage.external.tifffile import imread
 
 from keras.utils.np_utils import to_categorical
 
+
 class BinarySegmentationHandle(LazyTrainingHandle):
     def get_input_keys(self):
         '''returns a list of input keys
@@ -52,10 +53,10 @@ class BinarySegmentationHandle(LazyTrainingHandle):
         self['input'] = standardize(
             self['input'],
             min_scale=50)  # NOTE consider adjusting min_scale to your dataset
-            
+
         # load segmentation and make sure it's binary
         self['fg_pred'] = imread(self['segm_path']) >= 1
-        
+
         # add flat channel if needed
         for key in self.get_input_keys() + self.get_output_keys():
             if self[key].ndim == len(self.patch_size):
@@ -130,39 +131,39 @@ class InstanceSegmentationHandleWithSeparatorMultislice(
 
 class InstanceSegmentationHandleWithLocationMap(LazyTrainingHandle):
     '''Training handle for instance segmentation with location map.
-    
+
     Notes
     -----
-    Use static method 'add_default_config' to get an example of 
+    Use static method 'add_default_config' to get an example of
     configuration for this handle.
-    
+
     '''
-    
+
     @staticmethod
     def add_default_config(config):
-        '''Adds handle specific configuration (if it doesn't exist) to 
+        '''Adds handle specific configuration (if it doesn't exist) to
         an existing config dictionary.
-        
+
         Arguments
         ---------
-        
+
         config : dict
             A configuration dictionary already containing 'dataset' key.
         '''
-        
+
         try:
             if 'task_params' not in config['dataset'].keys():
                 config['dataset']['task_params'] = {
-                    'locationmap_params': {'period_bounds':((7,33), 
-                                                            (70,330), 
-                                                            (70,330)),
-                                           'offset_bounds':(0,1.0),},
-                    'sampling': (2,0.26,0.26),
-                    }
+                    'locationmap_params': {'period_bounds': ((7, 33),
+                                                             (70, 330),
+                                                             (70, 330)),
+                                           'offset_bounds': (0, 1.0), },
+                    'sampling': (2, 0.26, 0.26),
+                }
             return config
         except KeyError:
             pass
-    
+
     def get_input_keys(self):
         '''returns a list of input keys.
 
@@ -175,7 +176,15 @@ class InstanceSegmentationHandleWithLocationMap(LazyTrainingHandle):
         '''
         return ['fg_pred', 'segmentation']
 
-    def __init__(self, img_path, segm_path, patch_size, sampling, locationmap_params, *args, **kwargs):
+    def __init__(
+            self,
+            img_path,
+            segm_path,
+            patch_size,
+            sampling,
+            locationmap_params,
+            *args,
+            **kwargs):
         '''initializes handle with source paths and patch_size for sampling.
 
         '''
@@ -185,8 +194,10 @@ class InstanceSegmentationHandleWithLocationMap(LazyTrainingHandle):
         self.sampling = sampling
 
         ndim = len(patch_size)
-        self.period_bounds = np.broadcast_to(np.asarray(locationmap_params['period_bounds']), (ndim,2))
-        self.offset_bounds = np.broadcast_to(np.asarray(locationmap_params['offset_bounds']), (ndim,2))
+        self.period_bounds = np.broadcast_to(np.asarray(
+            locationmap_params['period_bounds']), (ndim, 2))
+        self.offset_bounds = np.broadcast_to(np.asarray(
+            locationmap_params['offset_bounds']), (ndim, 2))
 
     def load(self):
         '''
@@ -196,41 +207,45 @@ class InstanceSegmentationHandleWithLocationMap(LazyTrainingHandle):
 
         self['input'] = imread(self['img_path']).astype(np.float32)
         self['input'] = standardize(self['input'], min_scale=50)
-        location_map = generate_locationmap(self['input'].shape) # will be replaced during patch sampling
+        # will be replaced during patch sampling
+        location_map = generate_locationmap(self['input'].shape)
         self['input'] = np.expand_dims(self['input'], axis=-1)
         self['input'] = np.concatenate([self['input'], location_map], axis=-1)
 
         segm = imread(self['segm_path']).astype(np.int, copy=False)
-        self['fg_pred'] = segm>=1
-        norm_mask = generate_normalization_mask(self['fg_pred'], include_background=True)
+        self['fg_pred'] = segm >= 1
+        norm_mask = generate_normalization_mask(
+            self['fg_pred'], include_background=True)
         self['fg_pred'] = np.stack([self['fg_pred'], norm_mask], axis=-1)
-        
+
         self['segmentation'] = segm
-                                                                      
+
         # add flat channel if needed
         for key in self.get_input_keys() + self.get_output_keys():
             if self[key].ndim == len(self.patch_size):
                 self[key] = self[key][..., None]
-        
+
     def get_random_patch(self, patch_size, *args, **kwargs):
         '''
         '''
-    
+
         patches = super(InstanceSegmentationHandleWithLocationMap,
                         self).get_random_patch(patch_size, *args, **kwargs)
 
         # compute/randomize location map and corresponding target
         period = [np.random.uniform(*bound) for bound in self.period_bounds]
         offset = [np.random.uniform(*bound) for bound in self.offset_bounds]
-        
-        patches['input'][...,1:] = generate_locationmap(patches['input'][...,0].shape, period=period, offset=offset)
+
+        patches['input'][..., 1:] = generate_locationmap(
+            patches['input'][..., 0].shape, period=period, offset=offset)
         patches['input'] = np.ascontiguousarray(patches['input'])
-        
-        patches['segmentation'] = generate_locationmap_target(patches['segmentation'][...,0], patches['input'][...,1:])
+
+        patches['segmentation'] = generate_locationmap_target(
+            patches['segmentation'][..., 0], patches['input'][..., 1:])
         patches['segmentation'] = np.ascontiguousarray(patches['segmentation'])
-            
+
         return patches
-        
+
 
 def prepare_dataset(path_pairs,
                     task_type,
@@ -269,8 +284,8 @@ def prepare_dataset(path_pairs,
     train_handles, validation_handles = split(
         [Handle(*paths, patch_size=patch_size,
                 **task_params) for paths in path_pairs],
-            split_ratio,
-            stratify=stratify)
+        split_ratio,
+        stratify=stratify)
 
     logger = logging.getLogger(__name__)
     logger.info('Training samples: %i', len(train_handles))

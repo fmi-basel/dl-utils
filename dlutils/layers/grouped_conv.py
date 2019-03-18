@@ -39,12 +39,12 @@ class GroupedConvBase(KerasConvBase, metaclass=abc.ABCMeta):
     [1] Xie et al. Aggregated residual transformations for DNNs, CVPR 2017
 
     '''
-    
+
     @property
     @abc.abstractmethod
     def get_rank(self):
         pass
-        
+
     @property
     @abc.abstractmethod
     def conv_fct(self):
@@ -216,16 +216,16 @@ class GroupedConv2D(GroupedConvBase):
     [1] Xie et al. Aggregated residual transformations for DNNs, CVPR 2017
 
     '''
-    
+
     @property
     def get_rank(self):
         return 2
-        
+
     @property
     def conv_fct(self):
         return K.conv2d
-        
-        
+
+
 class GroupedConv3D(GroupedConvBase):
     '''Grouped 3D convolution layer.
 
@@ -258,12 +258,11 @@ class GroupedConv3D(GroupedConvBase):
     [1] Xie et al. Aggregated residual transformations for DNNs, CVPR 2017
 
     '''
-    
+
     @property
     def get_rank(self):
         return 3
-        
+
     @property
     def conv_fct(self):
         return K.conv3d
-        

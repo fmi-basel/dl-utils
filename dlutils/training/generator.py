@@ -131,7 +131,7 @@ class TrainingGenerator(Sequence):
             handle.load()  # make sure data is available.
             patches = handle.get_random_patch(self.patch_size,
                                               self.augmentator)
-                
+
             for key in inputs.keys():
                 inputs[key].append(patches[key])
             for key in outputs.keys():
@@ -148,7 +148,7 @@ class TrainingGenerator(Sequence):
         for key in outputs.keys():
             if not isinstance(outputs[key], np.ndarray):
                 outputs[key] = np.asarray(outputs[key])
-            
+
         return inputs, outputs
 
     def on_epoch_end(self):
