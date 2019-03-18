@@ -4,6 +4,7 @@ from sklearn.neighbors.nearest_centroid import NearestCentroid
 from scipy.ndimage.morphology import grey_opening, grey_closing
 from scipy.ndimage import label as ndimage_label
 from scipy.ndimage.morphology import binary_fill_holes
+from skimage.segmentation import relabel_sequential
 
 import warnings
 warnings.filterwarnings('once', category=DeprecationWarning, module=__name__)
@@ -105,17 +106,6 @@ def split_labels(labels):
             
     return labels_split
             
-def renumber_label(labels):
-    '''Renumber labels from 1 to #labels
-    '''
-    shape = labels.shape
-    u, indices = np.unique(labels, return_inverse=True)
-    lut = np.asarray([i for i in range(len(u))])
-    labels = lut[indices]
-    labels = np.reshape(labels, shape)
-    
-    return labels
-
 def remove_small_labels(labels, threshold=100):
     '''remove labels with pixel count smaller than threshold
     '''
@@ -179,6 +169,11 @@ def embeddings_to_labels(embeddings, fg_mask, coordinate_weight=0.001, sampling=
         labels = labels_fill_holes_sliced(labels)
         labels = split_labels(labels)
         labels = remove_small_labels(labels, threshold=size_threshold)
-        labels = renumber_label(labels)
+        
+        # directly use foreground prediction as label if no cluster found with HDBSCAN (likely a single instance)
+        if len(np.unique(labels)) <= 1 and fg_mask.sum() > size_threshold:
+            labels = fg_mask.astype(labels.dtype)
+            
+        labels,_,_ = relabel_sequential(labels)
     
     return labels
