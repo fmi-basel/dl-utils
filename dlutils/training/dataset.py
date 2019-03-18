@@ -129,6 +129,40 @@ class InstanceSegmentationHandleWithSeparatorMultislice(
 
 
 class InstanceSegmentationHandleWithLocationMap(LazyTrainingHandle):
+    '''Training handle for instance segmentation with location map.
+    
+    Notes
+    -----
+    Use static method 'add_default_config' to get an example of 
+    configuration for this handle.
+    
+    '''
+    
+    @staticmethod
+    def add_default_config(config):
+        '''Adds handle specific configuration (if it doesn't exist) to 
+        an existing config dictionary.
+        
+        Arguments
+        ---------
+        
+        config : dict
+            A configuration dictionary already containing 'dataset' key.
+        '''
+        
+        try:
+            if 'task_params' not in config['dataset'].keys():
+                config['dataset']['task_params'] = {
+                    'locationmap_params': {'period_bounds':((7,33), 
+                                                            (70,330), 
+                                                            (70,330)),
+                                           'offset_bounds':(0,1.0),},
+                    'sampling': (2,0.26,0.26),
+                    }
+            return config
+        except KeyError:
+            pass
+    
     def get_input_keys(self):
         '''returns a list of input keys.
 
