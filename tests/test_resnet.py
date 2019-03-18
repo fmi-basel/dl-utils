@@ -22,7 +22,7 @@ def cleanup():
         product(
             [(259, 297, 1), (302, 315, 3)],  # input shapes
             [2, 5],  # n_levels
-            [0.3, 1.2],  # width
+            [0.3, 1.0],  # width
             [2, 3]  # n_blocks
         )))
 def test_resnet_setup(input_shape, n_levels, width, n_blocks):

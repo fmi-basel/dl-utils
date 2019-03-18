@@ -7,12 +7,19 @@ import numpy as np
 
 from dlutils.training.generator import LazyTrainingHandle
 from dlutils.preprocessing.normalization import standardize
+from dlutils.preprocessing.crop import crop_object
 from dlutils.training.augmentations import ImageDataAugmentation
 from dlutils.training.generator import TrainingGenerator
 from dlutils.training.split import split
 from dlutils.training.targets import generate_separator_map
+from dlutils.training.targets.distance_transform import generate_distance_transform, shrink_labels
+from dlutils.training.targets.seeds import generate_seed_map
+from dlutils.training.targets.location_map import generate_locationmap, generate_locationmap_target
+from dlutils.training.targets.normalization_mask import generate_normalization_mask
 
 from skimage.external.tifffile import imread
+
+from keras.utils.np_utils import to_categorical
 
 
 class BinarySegmentationHandle(LazyTrainingHandle):
@@ -26,13 +33,13 @@ class BinarySegmentationHandle(LazyTrainingHandle):
         '''
         return ['fg_pred']
 
-    def __init__(self, img_path, segm_path, patch_size):
+    def __init__(self, img_path, segm_path, patch_size, *args, **kwargs):
         '''initializes handle with source paths and patch_size for sampling.
 
         '''
         self['img_path'] = img_path
         self['segm_path'] = segm_path
-        self.patch_size = patch_size
+        self.patch_size = patch_sizse
 
     def load(self):
         '''actually loads data.
@@ -69,7 +76,7 @@ class InstanceSegmentationHandleWithSeparator(LazyTrainingHandle):
         '''
         return ['fg_pred', 'separator_pred']
 
-    def __init__(self, img_path, segm_path, patch_size):
+    def __init__(self, img_path, segm_path, patch_size, *args, **kwargs):
         '''initializes handle with source paths and patch_size for sampling.
 
         '''
@@ -99,6 +106,8 @@ class InstanceSegmentationHandleWithSeparatorMultislice(
     def load(self):
         '''
         '''
+        if self.is_loaded():
+            return
         super(InstanceSegmentationHandleWithSeparatorMultislice, self).load()
 
         # move Z axis to last position and
@@ -120,11 +129,130 @@ class InstanceSegmentationHandleWithSeparatorMultislice(
         return patches
 
 
+class InstanceSegmentationHandleWithLocationMap(LazyTrainingHandle):
+    '''Training handle for instance segmentation with location map.
+
+    Notes
+    -----
+    Use static method 'add_default_config' to get an example of
+    configuration for this handle.
+
+    '''
+
+    @staticmethod
+    def add_default_config(config):
+        '''Adds handle specific configuration (if it doesn't exist) to
+        an existing config dictionary.
+
+        Arguments
+        ---------
+
+        config : dict
+            A configuration dictionary already containing 'dataset' key.
+        '''
+
+        try:
+            if 'task_params' not in config['dataset'].keys():
+                config['dataset']['task_params'] = {
+                    'locationmap_params': {'period_bounds': ((7, 33),
+                                                             (70, 330),
+                                                             (70, 330)),
+                                           'offset_bounds': (0, 1.0), },
+                    'sampling': (2, 0.26, 0.26),
+                }
+            return config
+        except KeyError:
+            pass
+
+    def get_input_keys(self):
+        '''returns a list of input keys.
+
+        '''
+        return ['input']
+
+    def get_output_keys(self):
+        '''returns a list of output keys.
+
+        '''
+        return ['fg_pred', 'segmentation']
+
+    def __init__(
+            self,
+            img_path,
+            segm_path,
+            patch_size,
+            sampling,
+            locationmap_params,
+            *args,
+            **kwargs):
+        '''initializes handle with source paths and patch_size for sampling.
+
+        '''
+        self['img_path'] = img_path
+        self['segm_path'] = segm_path
+        self.patch_size = patch_size
+        self.sampling = sampling
+
+        ndim = len(patch_size)
+        self.period_bounds = np.broadcast_to(np.asarray(
+            locationmap_params['period_bounds']), (ndim, 2))
+        self.offset_bounds = np.broadcast_to(np.asarray(
+            locationmap_params['offset_bounds']), (ndim, 2))
+
+    def load(self):
+        '''
+        '''
+        if self.is_loaded():
+            return
+
+        self['input'] = imread(self['img_path']).astype(np.float32)
+        self['input'] = standardize(self['input'], min_scale=50)
+        # will be replaced during patch sampling
+        location_map = generate_locationmap(self['input'].shape)
+        self['input'] = np.expand_dims(self['input'], axis=-1)
+        self['input'] = np.concatenate([self['input'], location_map], axis=-1)
+
+        segm = imread(self['segm_path']).astype(np.int, copy=False)
+        self['fg_pred'] = segm >= 1
+        norm_mask = generate_normalization_mask(
+            self['fg_pred'], include_background=True)
+        self['fg_pred'] = np.stack([self['fg_pred'], norm_mask], axis=-1)
+
+        self['segmentation'] = segm
+
+        # add flat channel if needed
+        for key in self.get_input_keys() + self.get_output_keys():
+            if self[key].ndim == len(self.patch_size):
+                self[key] = self[key][..., None]
+
+    def get_random_patch(self, patch_size, *args, **kwargs):
+        '''
+        '''
+
+        patches = super(InstanceSegmentationHandleWithLocationMap,
+                        self).get_random_patch(patch_size, *args, **kwargs)
+
+        # compute/randomize location map and corresponding target
+        period = [np.random.uniform(*bound) for bound in self.period_bounds]
+        offset = [np.random.uniform(*bound) for bound in self.offset_bounds]
+
+        patches['input'][..., 1:] = generate_locationmap(
+            patches['input'][..., 0].shape, period=period, offset=offset)
+        patches['input'] = np.ascontiguousarray(patches['input'])
+
+        patches['segmentation'] = generate_locationmap_target(
+            patches['segmentation'][..., 0], patches['input'][..., 1:])
+        patches['segmentation'] = np.ascontiguousarray(patches['segmentation'])
+
+        return patches
+
+
 def prepare_dataset(path_pairs,
                     task_type,
                     patch_size,
                     split_ratio=0.2,
                     augmentation_params=None,
+                    task_params=None,
                     **config_params):
     '''create a generator for training samples and validation samples.
 
@@ -140,6 +268,8 @@ def prepare_dataset(path_pairs,
         Handle = BinarySegmentationHandle
     elif task_type == 'instance_segmentation':
         Handle = InstanceSegmentationHandleWithSeparator
+    elif task_type == 'instance_segmentation_location_map':
+        Handle = InstanceSegmentationHandleWithLocationMap
     else:
         raise ValueError('Unknown task_type: {}'.format(task_type))
 
@@ -152,7 +282,8 @@ def prepare_dataset(path_pairs,
         stratify = None
 
     train_handles, validation_handles = split(
-        [Handle(*paths, patch_size=patch_size) for paths in path_pairs],
+        [Handle(*paths, patch_size=patch_size,
+                **task_params) for paths in path_pairs],
         split_ratio,
         stratify=stratify)
 

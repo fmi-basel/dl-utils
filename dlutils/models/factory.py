@@ -17,5 +17,8 @@ def construct_base_model(name, **model_params):
     elif name == 'rxunet':
         from dlutils.models.rxunet import GenericRxUnetBase
         return GenericRxUnetBase(**model_params)
+    elif name == 'hourglass':
+        from dlutils.models.hourglass import GenericHourglassBase
+        return GenericHourglassBase(**model_params)
     else:
         raise NotImplementedError('Model {} not known!'.format(name))

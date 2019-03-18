@@ -23,11 +23,12 @@ def cleanup():
     clear_session()
 
 
-@pytest.mark.parametrize("input_shape,image_shape",
+@pytest.mark.parametrize("input_shape,image_shape,border",
                          list(
                              product([(224, 224, 1), (230, 230, 1)],
-                                     [(300, 400, 1), (200, 300, 1)])))
-def test_predict_complete(input_shape, image_shape):
+                                     [(300, 400, 1), (200, 300, 1)],
+                                     [30,(30,20)])))
+def test_predict_complete(input_shape, image_shape,border):
     '''
     '''
     batch_size = 1
@@ -38,7 +39,7 @@ def test_predict_complete(input_shape, image_shape):
     image = np.random.randn(*image_shape)
 
     prediction = predict_complete(
-        model, image, batch_size=batch_size, border=30)
+        model, image, batch_size=batch_size, border=border)
 
     for key, val in prediction.items():
         assert val.shape == image.shape, \

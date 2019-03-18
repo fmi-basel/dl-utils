@@ -7,6 +7,7 @@ from builtins import range
 import numpy as np
 
 from sklearn.metrics import confusion_matrix
+from skimage.segmentation import relabel_sequential
 
 
 def instance_intersection_over_union(y_true, y_pred, bg_label=0):
@@ -21,6 +22,9 @@ def instance_intersection_over_union(y_true, y_pred, bg_label=0):
     give ratio `overlap`.
 
     '''
+
+    y_true, _, _ = relabel_sequential(y_true)
+    y_pred, _, _ = relabel_sequential(y_pred)
     y_true_sum = np.bincount(y_true.flat)
     y_pred_sum = np.bincount(y_pred.flat)
 

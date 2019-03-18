@@ -2,7 +2,7 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
-from dlutils.models.rxunet import GenericRxUnetBase
+from dlutils.models.hourglass import GenericHourglassBase
 from dlutils.models.heads import add_fcn_output_layers
 
 from itertools import product
@@ -19,35 +19,55 @@ def cleanup():
     from keras.backend import clear_session
     clear_session()
 
-
-@pytest.mark.parametrize(
-    "input_shape,width,cardinality,n_levels,with_bn,dropout",
-    list(
+params_isotropic = list(
         product(
             [
                 (256, 256, 3),
                 (310, 199, 1),
-                (259, 297, 1),
+                (64,64,64, 1),
+                (69,22,98, 1),
             ],  # input shapes
-            [0.25, 1], #1, 2],  # width
+            [1, 0.5],  # width
             [1, 4],  # cardinality
-            [
-                4,
-            ],  # n_levels
+            [1, 2], # n_stacks
+            [1,4],  # n_levels
             [True, False],  # with_bn
-            [0.5, ] #0.5],  # dropout
-        )))
-def test_setup(input_shape, width, cardinality, n_levels, with_bn, dropout):
+            [False],
+            [0.5, ] ,  # dropout
+        ))
+        
+params_anisotropic = list(
+        product(
+            [
+                (69,22,98, 1),
+            ],  # input shapes
+            [1, 0.5],  # width
+            [1, 4],  # cardinality
+            [1, 2], # n_stacks
+            [1,4],  # n_levels
+            [True, False],  # with_bn
+            [True],
+            [0.0, ] ,  # dropout
+        ))
+
+
+@pytest.mark.parametrize(
+    "input_shape,width,cardinality,n_stacks,n_levels,with_bn,anisotropic,dropout",
+    params_isotropic + params_anisotropic
+    )
+def test_setup(input_shape, width, cardinality, n_stacks, n_levels, with_bn, anisotropic, dropout):
     '''
     '''
     batch_size = 3
 
-    model = GenericRxUnetBase(
-        input_shape=(None, None, input_shape[2]),
+    model = GenericHourglassBase(
+        input_shape=tuple(None for _ in range(len(input_shape)-1)) + (input_shape[-1],),
         width=width,
         cardinality=cardinality,
+        n_stacks=n_stacks,
         n_levels=n_levels,
         with_bn=with_bn,
+        anisotropic=anisotropic,
         dropout=dropout)
 
     pred_names = ['pred_cell', 'pred_border']
@@ -72,4 +92,5 @@ def test_setup(input_shape, width, cardinality, n_levels, with_bn, dropout):
 
 
 if __name__ == '__main__':
-    test_setup((310, 199, 1), 0.25, 4, 5, True, 0.5)
+    test_setup((64,64,64, 1), 1, 4, 1, 1, False, True, 0.5)
+    

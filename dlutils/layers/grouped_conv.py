@@ -1,6 +1,4 @@
-from __future__ import absolute_import
-from __future__ import division
-from __future__ import print_function
+import abc
 
 import tensorflow as tf
 
@@ -9,8 +7,8 @@ from keras.layers.convolutional import _Conv as KerasConvBase
 from keras import backend as K
 
 
-class GroupedConv2D(KerasConvBase):
-    '''Grouped 2D convolution layer.
+class GroupedConvBase(KerasConvBase, metaclass=abc.ABCMeta):
+    '''Base class for Grouped convolution layer.
 
     This layer splits the input tensor into `cardinality` groups along
     the channel axis and creates a convolution kernel for each group
@@ -42,6 +40,16 @@ class GroupedConv2D(KerasConvBase):
 
     '''
 
+    @property
+    @abc.abstractmethod
+    def get_rank(self):
+        pass
+
+    @property
+    @abc.abstractmethod
+    def conv_fct(self):
+        pass
+
     def __init__(self,
                  filters,
                  kernel_size,
@@ -60,8 +68,8 @@ class GroupedConv2D(KerasConvBase):
                  kernel_constraint=None,
                  bias_constraint=None,
                  **kwargs):
-        super(GroupedConv2D, self).__init__(
-            rank=2,
+        super().__init__(
+            rank=self.get_rank,
             filters=filters,
             kernel_size=kernel_size,
             strides=strides,
@@ -147,7 +155,7 @@ class GroupedConv2D(KerasConvBase):
                     num_or_size_splits=self.cardinality,
                     axis=self.channel_axis)):
 
-            output = K.conv2d(
+            output = self.conv_fct(
                 split,
                 self.kernels[idx],
                 strides=self.strides,
@@ -169,8 +177,92 @@ class GroupedConv2D(KerasConvBase):
     def get_config(self):
         '''
         '''
-        config = super(GroupedConv2D, self).get_config()
+        config = super().get_config()
         config.pop('rank')
         config.pop('data_format')
         config['cardinality'] = self.cardinality
         return config
+
+
+class GroupedConv2D(GroupedConvBase):
+    '''Grouped 2D convolution layer.
+
+    This layer splits the input tensor into `cardinality` groups along
+    the channel axis and creates a convolution kernel for each group
+    that is convolved with the layer input to produce a tensor of
+    outputs. If `use_bias` is True, a bias vector is created and added
+    to the outputs. The outputs of each convolution are then
+    concatenated.  Finally, if `activation` is not `None`, it is
+    applied to the outputs as well.
+
+    Arguments
+    ---------
+    filters : int
+        Number of filters in total. Must be divisible by `cardinality`.
+    kernel_size : int or tuple of int
+        Kernel size of each convolution.
+    cardinality : int
+        Number of groups. Must divide both `filters` and input_channels.
+
+    **kwargs : see keras.layers.conv.
+
+    Notes
+    -----
+    Compatible only with tensorflow backend.
+
+    References
+    ----------
+
+    [1] Xie et al. Aggregated residual transformations for DNNs, CVPR 2017
+
+    '''
+
+    @property
+    def get_rank(self):
+        return 2
+
+    @property
+    def conv_fct(self):
+        return K.conv2d
+
+
+class GroupedConv3D(GroupedConvBase):
+    '''Grouped 3D convolution layer.
+
+    This layer splits the input tensor into `cardinality` groups along
+    the channel axis and creates a convolution kernel for each group
+    that is convolved with the layer input to produce a tensor of
+    outputs. If `use_bias` is True, a bias vector is created and added
+    to the outputs. The outputs of each convolution are then
+    concatenated.  Finally, if `activation` is not `None`, it is
+    applied to the outputs as well.
+
+    Arguments
+    ---------
+    filters : int
+        Number of filters in total. Must be divisible by `cardinality`.
+    kernel_size : int or tuple of int
+        Kernel size of each convolution.
+    cardinality : int
+        Number of groups. Must divide both `filters` and input_channels.
+
+    **kwargs : see keras.layers.conv.
+
+    Notes
+    -----
+    Compatible only with tensorflow backend.
+
+    References
+    ----------
+
+    [1] Xie et al. Aggregated residual transformations for DNNs, CVPR 2017
+
+    '''
+
+    @property
+    def get_rank(self):
+        return 3
+
+    @property
+    def conv_fct(self):
+        return K.conv3d
