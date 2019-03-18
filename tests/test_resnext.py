@@ -24,7 +24,7 @@ def cleanup():
         product(
             [(259, 297, 1), (302, 315, 3)],  # input shapes
             [2, 4, 5],  # n_levels
-            [1., 2.],  # width
+            [1., 0.5],  # width
             [2, ] # n_blocks
         )))
 def test_resnext_setup(input_shape, n_levels, width, n_blocks):
