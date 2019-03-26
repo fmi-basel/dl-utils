@@ -34,11 +34,11 @@ def generate_distance_transform(segmentation, sampling=1.0, sigma=0.5):
     return transform
 
 
-def shrink_labels(segmentation, sampling=1.0, distance_thresh=0.5):
+def shrink_labels(segmentation, sampling=1.0, distance_thresh=0.5, val=0):
     '''Thresholds normalized distance transform to shrink labeled instances
     '''
     shrunk_segmentation = segmentation.copy()
     dist = generate_distance_transform(segmentation, sampling=sampling)
-    shrunk_segmentation[dist < distance_thresh] = 0
+    shrunk_segmentation[dist < distance_thresh] = val
 
     return shrunk_segmentation
