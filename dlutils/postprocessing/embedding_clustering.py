@@ -7,8 +7,7 @@ from scipy.ndimage.morphology import binary_fill_holes
 from skimage.segmentation import relabel_sequential
 
 import warnings
-warnings.filterwarnings('once', category=DeprecationWarning, module=__name__)
-warnings.filterwarnings('once', category=ResourceWarning, module=__name__)
+warnings.filterwarnings('once', category=UserWarning, module=__name__)
 
 
 def add_pixel_coordinates(embeddings, weight=0.001, sampling=1.0):
@@ -45,10 +44,8 @@ def masked_HDBSCAN(embeddings, fg_mask, min_cluster_size=100, min_samples=10):
     n_features = embeddings.shape[-1]
     embeddings_foreground = embeddings[fg_mask]
     if len(embeddings_foreground) > 500000:
-        warnings.warn(
-            'Clustering {} points, that might take a while...'.format(
-                len(embeddings_foreground)),
-            ResourceWarning)
+        raise RuntimeError('Trying to cluster too many points: {}'.format(
+                len(embeddings_foreground)))
 
     clusterer = hdbscan.HDBSCAN(min_cluster_size=min_cluster_size,
                                 min_samples=min_samples,
