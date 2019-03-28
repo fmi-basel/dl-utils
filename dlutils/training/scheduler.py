@@ -30,6 +30,21 @@ def CosineAnnealingSchedule(lr_max, lr_min, epoch_max, reset_decay=1):
         return lr_min + 0.5 * (current_lr_max - lr_min) * cosine_factor
 
     return schedule
+    
+
+def stepLRSchedule(step_size=100, gamma=0.1, initial_lr=0.001):
+    '''Creates a learning rate scheduler that reduces the learning rate 
+    by a factor 'gamma' every 'step_size' epochs.
+    '''
+    
+    def schedule(epoch, current_lr=None):
+        '''schedule function to be passed to LearningRateScheduler.
+
+        '''
+        
+        return initial_lr * gamma**(epoch//step_size)
+
+    return schedule
 
 
 def get_lr_metric(optimizer):
