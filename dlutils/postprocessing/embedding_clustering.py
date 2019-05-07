@@ -52,16 +52,18 @@ def masked_HDBSCAN(embeddings, fg_mask, min_cluster_size=100, min_samples=10):
                                 metric='l2',
                                 )
     labels_foreground = clusterer.fit_predict(embeddings_foreground)
-    labels_foreground += 1  # outliers==1 --> background==0
+    labels_foreground += 1  # outliers==-1 --> background==0
+    inliers = labels_foreground>0
+    # ~ outliers = labels_foreground<=0
 
     unique_labels = np.unique(labels_foreground)
     if len(unique_labels) > 1 and unique_labels.max() > 0:
         clf = NearestCentroid(metric='euclidean')
-        clf.fit(embeddings_foreground, labels_foreground)
+        clf.fit(embeddings_foreground[inliers], labels_foreground[inliers])
         centers = clf.centroids_
-        if np.unique(labels_foreground)[0] == 0:
-            # discard centroid for label 0 (outliers/background)
-            centers = centers[1:]
+        
+        # assign hdbscan outliers to nearest centroid to avoid "noisy edges"
+        # ~ labels_foreground[outliers] = clf.predict(embeddings_foreground[outliers])
     else:
         centers = np.empty((0, n_features))
 
