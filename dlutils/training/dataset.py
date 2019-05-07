@@ -174,7 +174,7 @@ class InstanceSegmentationHandleWithLocationMap(LazyTrainingHandle):
         '''returns a list of output keys.
 
         '''
-        return ['fg_pred', 'segmentation']
+        return ['segmentation']
 
     def __init__(
             self,
@@ -213,10 +213,6 @@ class InstanceSegmentationHandleWithLocationMap(LazyTrainingHandle):
         self['input'] = np.concatenate([self['input'], location_map], axis=-1)
 
         segm = imread(self['segm_path']).astype(np.int, copy=False)
-        self['fg_pred'] = segm >= 1
-        norm_mask = generate_normalization_mask(
-            self['fg_pred'], include_background=True)
-        self['fg_pred'] = np.stack([self['fg_pred'], norm_mask], axis=-1)
 
         self['segmentation'] = segm
 
@@ -245,6 +241,60 @@ class InstanceSegmentationHandleWithLocationMap(LazyTrainingHandle):
         patches['segmentation'] = np.ascontiguousarray(patches['segmentation'])
 
         return patches
+        
+
+class WeightedBinarySegmentation(LazyTrainingHandle):
+    '''Training handle for binary segmentation with normalization mask.
+    '''
+
+    def get_input_keys(self):
+        '''returns a list of input keys.
+
+        '''
+        return ['input']
+
+    def get_output_keys(self):
+        '''returns a list of output keys.
+
+        '''
+        return ['fg_pred']
+
+    def __init__(
+            self,
+            img_path,
+            segm_path,
+            patch_size,
+            sampling,
+            *args,
+            **kwargs):
+        '''initializes handle with source paths and patch_size for sampling.
+
+        '''
+        self['img_path'] = img_path
+        self['segm_path'] = segm_path
+        self.patch_size = patch_size
+        self.sampling = sampling
+        
+
+    def load(self):
+        '''
+        '''
+        if self.is_loaded():
+            return
+
+        self['input'] = imread(self['img_path']).astype(np.float32)
+        self['input'] = standardize(self['input'], min_scale=50)
+
+        segm = imread(self['segm_path']).astype(np.int, copy=False)
+        self['fg_pred'] = segm >= 1
+        norm_mask = generate_normalization_mask(
+            self['fg_pred'], include_background=True)
+        self['fg_pred'] = np.stack([self['fg_pred'], norm_mask], axis=-1)
+
+        # add flat channel if needed
+        for key in self.get_input_keys() + self.get_output_keys():
+            if self[key].ndim == len(self.patch_size):
+                self[key] = self[key][..., None]
 
 
 def prepare_dataset(path_pairs,
@@ -270,6 +320,8 @@ def prepare_dataset(path_pairs,
         Handle = InstanceSegmentationHandleWithSeparator
     elif task_type == 'instance_segmentation_location_map':
         Handle = InstanceSegmentationHandleWithLocationMap
+    elif task_type =='weighted_binary_segmentation':
+        Handle = WeightedBinarySegmentation
     else:
         raise ValueError('Unknown task_type: {}'.format(task_type))
 
