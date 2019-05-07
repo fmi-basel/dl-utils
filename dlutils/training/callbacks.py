@@ -52,6 +52,7 @@ def create_callbacks(outdir,
                      epochs,
                      lr_min=None,
                      n_restarts=None,
+                     epoch_to_restart_growth=1.0,
                      restart_decay=1.0,
                      debug=False):
     '''Add basic callbacks for training.
@@ -70,7 +71,14 @@ def create_callbacks(outdir,
     if n_restarts is None:
         epochs_to_restart = epochs
     else:
-        epochs_to_restart = int(ceil((epochs + 1) / n_restarts))
+        n_restarts_factor = sum(epoch_to_restart_growth**x for x in range(n_restarts))
+        
+        epochs_to_restart = (epochs + 1) / n_restarts_factor
+        if epochs_to_restart < 1:
+            raise ValueError(
+                'Initial epoch_to_restart ({}) < 1. Decrease n_restarts ({}) or epoch_to_restart_growth ({})'.format(epochs_to_restart, n_restarts, epoch_to_restart_growth))
+        
+        epochs_to_restart = int(ceil(epochs_to_restart))
 
     callbacks = []
     callbacks.append(
@@ -102,6 +110,7 @@ def create_callbacks(outdir,
                 lr_max=lr,
                 lr_min=lr_min,
                 epoch_max=epochs_to_restart,
+                epoch_max_growth=epoch_to_restart_growth,
                 reset_decay=restart_decay)))
     callbacks.append(TerminateOnNaN())
     return callbacks

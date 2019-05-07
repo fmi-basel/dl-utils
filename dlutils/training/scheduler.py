@@ -5,13 +5,12 @@ from __future__ import print_function
 import numpy as np
 
 
-def CosineAnnealingSchedule(lr_max, lr_min, epoch_max, reset_decay=1):
+def CosineAnnealingSchedule(lr_max, lr_min, epoch_max, epoch_max_growth=1., reset_decay=1.):
     '''create a learning rate scheduler that follows the approach from
 
     SGDR: Stochastic gradient descent with warm restarts,
     Loshchilov & Hutter, ICLR 2017
 
-    TODO implement increasing epoch_max multiplier.
     TODO implement checkpointing the model each time a reset is done.
 
     '''
@@ -24,9 +23,20 @@ def CosineAnnealingSchedule(lr_max, lr_min, epoch_max, reset_decay=1):
         '''schedule function to be passed to LearningRateScheduler.
 
         '''
-        current_lr_max = reset_decay**-int(epoch / epoch_max) * lr_max
+        n_reset = 0
+        epoch_since_reset = epoch
+        while epoch_since_reset >= 0:
+            epoch_since_reset -= epoch_max_growth**n_reset * epoch_max
+            n_reset += 1
+        
+        n_reset -= 1
+        epoch_since_reset += epoch_max_growth**n_reset * epoch_max
+        
+        current_lr_max = reset_decay**n_reset * lr_max
+        current_epoch_max = epoch_max_growth**n_reset * epoch_max
+        
         cosine_factor = (
-            1 + np.cos(float(epoch % epoch_max) / epoch_max * np.pi))
+            1 + np.cos(float(epoch_since_reset) / current_epoch_max * np.pi))
         return lr_min + 0.5 * (current_lr_max - lr_min) * cosine_factor
 
     return schedule

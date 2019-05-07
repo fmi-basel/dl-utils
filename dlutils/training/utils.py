@@ -37,6 +37,8 @@ def train(dataset,
           learning_rate=None,
           steps_per_epoch=None,
           n_restarts=None,
+          learning_rate_min=None,
+          epoch_to_restart_growth=1.0,
           **training_config):
     '''
     '''
@@ -58,6 +60,8 @@ def train(dataset,
         outdir=outdir,
         nth_checkpoint=10000,  # dont checkpoint models too frequently.
         n_restarts=n_restarts,
+        lr_min=learning_rate_min,
+        epoch_to_restart_growth=epoch_to_restart_growth,
         epochs=training_config['epochs'])
 
     if steps_per_epoch is None:
