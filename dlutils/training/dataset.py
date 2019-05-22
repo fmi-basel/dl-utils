@@ -154,10 +154,10 @@ class InstanceSegmentationHandleWithLocationMap(LazyTrainingHandle):
         try:
             if 'task_params' not in config['dataset'].keys():
                 config['dataset']['task_params'] = {
-                    'locationmap_params': {'period_bounds': ((7, 33),
-                                                             (70, 330),
-                                                             (70, 330)),
-                                           'offset_bounds': (0, 1.0), },
+                    'locationmap_params': {
+                        'period_bounds': ((7, 33), (70, 330), (70, 330)),
+                        'offset_bounds': (0, 1.0),
+                    },
                     'sampling': (2, 0.26, 0.26),
                 }
             return config
@@ -176,15 +176,14 @@ class InstanceSegmentationHandleWithLocationMap(LazyTrainingHandle):
         '''
         return ['segmentation']
 
-    def __init__(
-            self,
-            img_path,
-            segm_path,
-            patch_size,
-            sampling,
-            locationmap_params,
-            *args,
-            **kwargs):
+    def __init__(self,
+                 img_path,
+                 segm_path,
+                 patch_size,
+                 locationmap_params,
+                 sampling=1,
+                 *args,
+                 **kwargs):
         '''initializes handle with source paths and patch_size for sampling.
 
         '''
@@ -194,10 +193,10 @@ class InstanceSegmentationHandleWithLocationMap(LazyTrainingHandle):
         self.sampling = sampling
 
         ndim = len(patch_size)
-        self.period_bounds = np.broadcast_to(np.asarray(
-            locationmap_params['period_bounds']), (ndim, 2))
-        self.offset_bounds = np.broadcast_to(np.asarray(
-            locationmap_params['offset_bounds']), (ndim, 2))
+        self.period_bounds = np.broadcast_to(
+            np.asarray(locationmap_params['period_bounds']), (ndim, 2))
+        self.offset_bounds = np.broadcast_to(
+            np.asarray(locationmap_params['offset_bounds']), (ndim, 2))
 
     def load(self):
         '''
@@ -206,20 +205,21 @@ class InstanceSegmentationHandleWithLocationMap(LazyTrainingHandle):
             return
 
         self['input'] = imread(self['img_path']).astype(np.float32)
-        self['input'] = standardize(self['input'], min_scale=50)
-        # will be replaced during patch sampling
-        location_map = generate_locationmap(self['input'].shape)
-        self['input'] = np.expand_dims(self['input'], axis=-1)
-        self['input'] = np.concatenate([self['input'], location_map], axis=-1)
-
         segm = imread(self['segm_path']).astype(np.int, copy=False)
-
         self['segmentation'] = segm
 
         # add flat channel if needed
         for key in self.get_input_keys() + self.get_output_keys():
             if self[key].ndim == len(self.patch_size):
                 self[key] = self[key][..., None]
+
+        self['input'] = standardize(self['input'],
+                                    min_scale=50,
+                                    separate_channels=True)
+        # will be replaced during patch sampling
+        location_map = generate_locationmap(self['input'].shape[:-1])
+        # ~self['input'] = np.expand_dims(self['input'], axis=-1)
+        self['input'] = np.concatenate([self['input'], location_map], axis=-1)
 
     def get_random_patch(self, patch_size, *args, **kwargs):
         '''
@@ -241,7 +241,7 @@ class InstanceSegmentationHandleWithLocationMap(LazyTrainingHandle):
         patches['segmentation'] = np.ascontiguousarray(patches['segmentation'])
 
         return patches
-        
+
 
 class WeightedBinarySegmentation(LazyTrainingHandle):
     '''Training handle for binary segmentation with normalization mask.
@@ -259,14 +259,13 @@ class WeightedBinarySegmentation(LazyTrainingHandle):
         '''
         return ['fg_pred']
 
-    def __init__(
-            self,
-            img_path,
-            segm_path,
-            patch_size,
-            sampling,
-            *args,
-            **kwargs):
+    def __init__(self,
+                 img_path,
+                 segm_path,
+                 patch_size,
+                 sampling=1,
+                 *args,
+                 **kwargs):
         '''initializes handle with source paths and patch_size for sampling.
 
         '''
@@ -274,7 +273,6 @@ class WeightedBinarySegmentation(LazyTrainingHandle):
         self['segm_path'] = segm_path
         self.patch_size = patch_size
         self.sampling = sampling
-        
 
     def load(self):
         '''
@@ -283,18 +281,21 @@ class WeightedBinarySegmentation(LazyTrainingHandle):
             return
 
         self['input'] = imread(self['img_path']).astype(np.float32)
-        self['input'] = standardize(self['input'], min_scale=50)
 
         segm = imread(self['segm_path']).astype(np.int, copy=False)
         self['fg_pred'] = segm >= 1
-        norm_mask = generate_normalization_mask(
-            self['fg_pred'], include_background=True)
+        norm_mask = generate_normalization_mask(self['fg_pred'],
+                                                include_background=True)
         self['fg_pred'] = np.stack([self['fg_pred'], norm_mask], axis=-1)
 
         # add flat channel if needed
         for key in self.get_input_keys() + self.get_output_keys():
             if self[key].ndim == len(self.patch_size):
                 self[key] = self[key][..., None]
+
+        self['input'] = standardize(self['input'],
+                                    min_scale=50,
+                                    separate_channels=True)
 
 
 def prepare_dataset(path_pairs,
@@ -320,7 +321,7 @@ def prepare_dataset(path_pairs,
         Handle = InstanceSegmentationHandleWithSeparator
     elif task_type == 'instance_segmentation_location_map':
         Handle = InstanceSegmentationHandleWithLocationMap
-    elif task_type =='weighted_binary_segmentation':
+    elif task_type == 'weighted_binary_segmentation':
         Handle = WeightedBinarySegmentation
     else:
         raise ValueError('Unknown task_type: {}'.format(task_type))
@@ -333,11 +334,12 @@ def prepare_dataset(path_pairs,
     else:
         stratify = None
 
-    train_handles, validation_handles = split(
-        [Handle(*paths, patch_size=patch_size,
-                **task_params) for paths in path_pairs],
-        split_ratio,
-        stratify=stratify)
+    train_handles, validation_handles = split([
+        Handle(*paths, patch_size=patch_size, **task_params)
+        for paths in path_pairs
+    ],
+                                              split_ratio,
+                                              stratify=stratify)
 
     logger = logging.getLogger(__name__)
     logger.info('Training samples: %i', len(train_handles))
@@ -349,13 +351,15 @@ def prepare_dataset(path_pairs,
             handle.load()
 
     dataset = dict()
-    dataset['training'] = TrainingGenerator(
-        train_handles, patch_size=patch_size, **config_params)
+    dataset['training'] = TrainingGenerator(train_handles,
+                                            patch_size=patch_size,
+                                            **config_params)
 
     if augmentation_params is not None:
         dataset['training'].augmentator = ImageDataAugmentation(
             **augmentation_params)
 
-    dataset['validation'] = TrainingGenerator(
-        validation_handles, patch_size=patch_size, **config_params)
+    dataset['validation'] = TrainingGenerator(validation_handles,
+                                              patch_size=patch_size,
+                                              **config_params)
     return dataset
