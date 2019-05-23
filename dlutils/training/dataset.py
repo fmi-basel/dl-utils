@@ -232,12 +232,12 @@ class InstanceSegmentationHandleWithLocationMap(LazyTrainingHandle):
         period = [np.random.uniform(*bound) for bound in self.period_bounds]
         offset = [np.random.uniform(*bound) for bound in self.offset_bounds]
 
-        patches['input'][..., 1:] = generate_locationmap(
+        patches['input'][..., -4:] = generate_locationmap(
             patches['input'][..., 0].shape, period=period, offset=offset)
         patches['input'] = np.ascontiguousarray(patches['input'])
 
         patches['segmentation'] = generate_locationmap_target(
-            patches['segmentation'][..., 0], patches['input'][..., 1:])
+            patches['segmentation'][..., 0], patches['input'][..., -4:])
         patches['segmentation'] = np.ascontiguousarray(patches['segmentation'])
 
         return patches
