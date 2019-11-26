@@ -1,13 +1,13 @@
-from keras.engine.topology import get_source_inputs
+from tensorflow.keras.engine.topology import get_source_inputs
 
-from keras.engine import Input
-from keras.engine import Model
-from keras.layers import Convolution2D
-from keras.layers import MaxPooling2D
-from keras.layers import Deconvolution2D
-from keras.layers import Dropout
-from keras.layers import BatchNormalization
-from keras.layers import concatenate
+from tensorflow.keras.engine import Input
+from tensorflow.keras.engine import Model
+from tensorflow.keras.layers import Convolution2D
+from tensorflow.keras.layers import MaxPooling2D
+from tensorflow.keras.layers import Deconvolution2D
+from tensorflow.keras.layers import Dropout
+from tensorflow.keras.layers import BatchNormalization
+from tensorflow.keras.layers import concatenate
 
 from dlutils.layers.padding import DynamicPaddingLayer, DynamicTrimmingLayer
 

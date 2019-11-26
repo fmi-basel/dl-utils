@@ -1,7 +1,7 @@
 import tensorflow as tf
-from keras.backend.tensorflow_backend import _to_tensor
-from keras.backend.common import epsilon
-from keras.backend import mean
+from tensorflow.keras.backend.tensorflow_backend import _to_tensor
+from tensorflow.keras.backend.common import epsilon
+from tensorflow.keras.backend import mean
 
 
 def weighted_binary_crossentropy(pos_weight):

@@ -2,9 +2,9 @@ import abc
 
 import tensorflow as tf
 
-from keras.layers.convolutional import _Conv as KerasConvBase
+from tensorflow.keras.layers.convolutional import _Conv as KerasConvBase
 
-from keras import backend as K
+from tensorflow.keras import backend as K
 
 
 class GroupedConvBase(KerasConvBase, metaclass=abc.ABCMeta):
@@ -27,7 +27,7 @@ class GroupedConvBase(KerasConvBase, metaclass=abc.ABCMeta):
     cardinality : int
         Number of groups. Must divide both `filters` and input_channels.
 
-    **kwargs : see keras.layers.conv.
+    **kwargs : see tensorflow.keras.layers.conv.
 
     Notes
     -----
@@ -204,7 +204,7 @@ class GroupedConv2D(GroupedConvBase):
     cardinality : int
         Number of groups. Must divide both `filters` and input_channels.
 
-    **kwargs : see keras.layers.conv.
+    **kwargs : see tensorflow.keras.layers.conv.
 
     Notes
     -----
@@ -246,7 +246,7 @@ class GroupedConv3D(GroupedConvBase):
     cardinality : int
         Number of groups. Must divide both `filters` and input_channels.
 
-    **kwargs : see keras.layers.conv.
+    **kwargs : see tensorflow.keras.layers.conv.
 
     Notes
     -----

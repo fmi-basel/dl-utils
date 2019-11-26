@@ -13,20 +13,20 @@ from __future__ import print_function
 from __future__ import unicode_literals
 from builtins import range
 
-from keras.engine import Input
-from keras.engine import Model
-from keras.engine.topology import get_source_inputs
+from tensorflow.keras.engine import Input
+from tensorflow.keras.engine import Model
+from tensorflow.keras.engine.topology import get_source_inputs
 
-from keras.layers import BatchNormalization
-from keras.layers import Activation
-from keras.layers import add
-from keras.layers import concatenate
-from keras.layers import Conv2D, Conv3D
-from keras.layers import UpSampling2D, UpSampling3D
-from keras.layers import MaxPooling2D, MaxPooling3D
-from keras.layers import Dropout
+from tensorflow.keras.layers import BatchNormalization
+from tensorflow.keras.layers import Activation
+from tensorflow.keras.layers import add
+from tensorflow.keras.layers import concatenate
+from tensorflow.keras.layers import Conv2D, Conv3D
+from tensorflow.keras.layers import UpSampling2D, UpSampling3D
+from tensorflow.keras.layers import MaxPooling2D, MaxPooling3D
+from tensorflow.keras.layers import Dropout
 
-from keras.backend import get_uid
+from tensorflow.keras.backend import get_uid
 
 from dlutils.layers.grouped_conv import GroupedConv2D, GroupedConv3D
 from dlutils.layers.padding import DynamicPaddingLayer

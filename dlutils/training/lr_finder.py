@@ -3,14 +3,14 @@ from __future__ import division
 from __future__ import print_function
 from builtins import range
 
-from keras.callbacks import Callback
+from tensorflow.keras.callbacks import Callback
 
 from scipy.ndimage.filters import gaussian_filter1d
 
 from numpy import logspace, log10
 
 import numpy as np
-import keras.backend as K
+import tensorflow.keras.backend as K
 
 
 class LRFinderCallback(Callback):

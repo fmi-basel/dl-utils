@@ -2,9 +2,9 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
-from keras import backend as K
-from keras.engine import InputSpec
-from keras.engine.topology import Layer
+from tensorflow.keras import backend as K
+from tensorflow.keras.engine import InputSpec
+from tensorflow.keras.engine.topology import Layer
 
 import tensorflow as tf
 

@@ -1,9 +1,9 @@
-from keras import backend as K
+from tensorflow.keras import backend as K
 import tensorflow as tf
 
 from tensorflow import where, gather_nd, unique
-from keras.layers import multiply, add
-from keras.layers import Lambda
+from tensorflow.keras.layers import multiply, add
+from tensorflow.keras.layers import Lambda
 
 
 def laplacian_loss(min_curvature=0.0, sampling=None):

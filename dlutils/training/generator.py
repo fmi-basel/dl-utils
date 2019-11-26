@@ -7,7 +7,7 @@ import os
 import logging
 
 import numpy as np
-from keras.utils import Sequence
+from tensorflow.keras.utils import Sequence
 
 from dlutils.training.sampling import get_random_patch
 

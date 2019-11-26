@@ -4,9 +4,9 @@ from __future__ import print_function
 
 import tensorflow as tf
 
-from keras.layers.convolutional import _Conv as KerasConvBase
+from tensorflow.keras.layers.convolutional import _Conv as KerasConvBase
 
-from keras import backend as K
+from tensorflow.keras import backend as K
 
 
 class DilatedConv2D(KerasConvBase):

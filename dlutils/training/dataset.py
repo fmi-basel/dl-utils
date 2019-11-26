@@ -19,7 +19,7 @@ from dlutils.training.targets.normalization_mask import generate_normalization_m
 
 from skimage.external.tifffile import imread
 
-from keras.utils.np_utils import to_categorical
+from tensorflow.keras.utils.np_utils import to_categorical
 
 
 class BinarySegmentationHandle(LazyTrainingHandle):

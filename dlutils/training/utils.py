@@ -4,7 +4,7 @@ import os
 from dlutils.training.lr_finder import lr_finder
 from dlutils.training.callbacks import create_callbacks
 
-from keras.backend import clear_session
+from tensorflow.keras.backend import clear_session
 
 
 def estimate_learning_rate(model_constructor, dataset):

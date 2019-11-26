@@ -15,7 +15,7 @@ setup(
         'tests',
     ]),
     install_requires=[
-        'numpy', 'matplotlib', 'scipy', 'keras==2.0.8', 'opencv-python>=3.4',
+        'numpy', 'matplotlib', 'scipy', 'opencv-python>=3.4', 'tensorflow>=2',
         'scikit-image>=0.13', 'scikit-learn', 'future', 'tqdm', 'pytest',
         'pyyaml', 'h5py'
     ],

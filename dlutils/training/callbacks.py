@@ -2,12 +2,12 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
-from keras.callbacks import ModelCheckpoint
-from keras.callbacks import TensorBoard
-from keras.callbacks import CSVLogger
-from keras.callbacks import LearningRateScheduler
-from keras.callbacks import Callback
-from keras.callbacks import TerminateOnNaN
+from tensorflow.keras.callbacks import ModelCheckpoint
+from tensorflow.keras.callbacks import TensorBoard
+from tensorflow.keras.callbacks import CSVLogger
+from tensorflow.keras.callbacks import LearningRateScheduler
+from tensorflow.keras.callbacks import Callback
+from tensorflow.keras.callbacks import TerminateOnNaN
 
 from dlutils.training.scheduler import CosineAnnealingSchedule
 

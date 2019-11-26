@@ -1,7 +1,7 @@
-from keras.layers import Conv2D
-from keras.layers import BatchNormalization
-from keras import backend as K
-from keras.layers.merge import concatenate
+from tensorflow.keras.layers import Conv2D
+from tensorflow.keras.layers import BatchNormalization
+from tensorflow.keras import backend as K
+from tensorflow.keras.layers.merge import concatenate
 
 from dlutils.layers.dilated_conv import DilatedConv2D
 

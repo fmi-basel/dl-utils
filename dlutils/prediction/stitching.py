@@ -8,7 +8,7 @@ from dlutils.models.utils import get_batch_size
 from dlutils.models.utils import get_patch_size
 from dlutils.models.utils import get_input_channels
 
-from keras.utils import Sequence
+from tensorflow.keras.utils import Sequence
 
 import numpy as np
 
