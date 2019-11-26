@@ -1,12 +1,12 @@
-from keras import backend as K
-from keras import layers
+from tensorflow.keras import backend as K
+from tensorflow.keras import layers
 
 import numpy as np
 
 import pytest
 
-from dlutils.losses.weighted_bce import weighted_binary_crossentropy
-from keras.losses import binary_crossentropy
+from dlutils.losses.weighted_bce import WeightedBinaryCrossEntropy
+from tensorflow.keras.losses import binary_crossentropy
 
 
 @pytest.mark.parametrize("ndim", [1, 2, 3])
@@ -16,13 +16,8 @@ def test_unweighted(ndim):
     '''
     pos_weight = 1
 
-    shape = (None, ) * ndim + (1, )
-    x = layers.Input(shape=shape)
-    y = layers.Input(shape=shape)
-    weighted_bce = K.Function([x, y],
-                              [weighted_binary_crossentropy(pos_weight)(x, y)])
-
-    regular_bce = K.function([x, y], [binary_crossentropy(x, y)])
+    loss_func = WeightedBinaryCrossEntropy(pos_weight)
+    regular_bce = binary_crossentropy
 
     reshape = (10, ) * ndim + (1, )
     px = np.linspace(0, 1, np.prod(reshape)).reshape(reshape)
@@ -30,14 +25,9 @@ def test_unweighted(ndim):
     labels = px > 0.5
 
     loss = np.asarray(
-        [weighted_bce([[labels], [px - dx]]) for dx in dxx]).flatten()
+        [loss_func(labels, px - dx) for dx in dxx]).flatten()
     regular_loss = np.asarray(
-        [regular_bce([[labels], [px - dx]]) for dx in dxx]).flatten()
-
-    # import matplotlib.pyplot as plt
-    # plt.plot(loss, marker='x')
-    # plt.plot(regular_loss, marker='o')
-    # plt.show()
+        [regular_bce(labels, px - dx) for dx in dxx]).flatten()
 
     assert all(pytest.approx(x - y, 0.) for x, y in zip(loss, regular_loss))
 
@@ -47,26 +37,16 @@ def test_loss(pos_weight):
     '''test scaling with pos_weight.
 
     '''
-    x = layers.Input(shape=(None, ))
-    y = layers.Input(shape=(None, ))
-    loss_func = K.Function([x, y],
-                           [weighted_binary_crossentropy(pos_weight)(x, y)])
-
-    regular_bce = K.function([x, y], [binary_crossentropy(x, y)])
+    loss_func = WeightedBinaryCrossEntropy(pos_weight)
+    regular_bce = binary_crossentropy
 
     px = np.linspace(0, 1, 100)
     dxx = np.linspace(-0.5, 0.5, 10)
     labels = px > 0.5
 
-    loss = np.asarray(
-        [loss_func([[labels], [px - dx]]) for dx in dxx]).flatten()
+    loss = np.asarray([loss_func(labels, px - dx) for dx in dxx]).flatten()
     regular_loss = np.asarray(
-        [regular_bce([[labels], [px - dx]]) for dx in dxx]).flatten()
-
-    # import matplotlib.pyplot as plt
-    # plt.plot(loss, marker='x')
-    # plt.plot(regular_loss, marker='o')
-    # plt.show()
+        [regular_bce(labels, px - dx) for dx in dxx]).flatten()
 
     assert pytest.approx(loss[0] - regular_loss[0], 0.)
     assert pytest.approx(loss[-1] - regular_loss[-1] * pos_weight, 0.)

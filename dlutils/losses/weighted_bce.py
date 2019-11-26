@@ -1,40 +1,52 @@
 import tensorflow as tf
-from tensorflow.keras.backend.tensorflow_backend import _to_tensor
-from tensorflow.keras.backend.common import epsilon
-from tensorflow.keras.backend import mean
 
 
-def weighted_binary_crossentropy(pos_weight):
-    '''Weighted binary crossentropy between an output tensor and a target tensor.
+class WeightedBinaryCrossEntropy(tf.keras.losses.Loss):
+    """
+    Args:
+      pos_weight: Scalar to affect the positive labels of the loss function.
+      weight: Scalar to affect the entirety of the loss function.
+      from_logits: Whether to compute loss form logits or the probability.
+      reduction: Type of tf.keras.losses.Reduction to apply to loss.
+      name: Name of the loss function.
 
-    # Arguments
-        pos_weight: float weighting the positive class.
+    Notes
+    -----
+    This is from the example here:
+      https://www.tensorflow.org/guide/keras/train_and_evaluate
 
-    '''
+    """
 
-    def _wbce(target, output, from_logits=False):
-        '''
-        # Arguments
-            target: A tensor with the same shape as `output`.
-            output: A tensor.
-            from_logits: Whether `output` is expected to be a logits tensor.
-            By default, we consider that `output`
-            encodes a probability distribution.
-        # Returns
-            A tensor.
-        '''
+    def __init__(self,
+                 pos_weight,
+                 weight=1.,
+                 from_logits=False,
+                 reduction=tf.keras.losses.Reduction.AUTO,
+                 name='weighted_binary_crossentropy'):
+        super(WeightedBinaryCrossEntropy, self).__init__(
+            reduction=reduction, name=name)
+        self.pos_weight = pos_weight
+        self.weight = weight
+        self.from_logits = from_logits
 
-        # Note: tf.nn.weighted_cross_entropy_with_logits
-        # expects logits, Keras expects probabilities.
-        if not from_logits:
-            # transform back to logits
-            _epsilon = _to_tensor(epsilon(), output.dtype.base_dtype)
-            output = tf.clip_by_value(output, _epsilon, 1 - _epsilon)
-            output = tf.log(output / (1 - output))
+    def call(self, y_true, y_pred):
+        if not self.from_logits:
+            # Manually calculate the weighted cross entropy.
+            # Formula is qz * -log(sigmoid(x)) + (1 - z) * -log(1 - sigmoid(x))
+            # where z are labels, x is logits, and q is the weight.
+            # Since the values passed are from sigmoid (assuming in this case)
+            # sigmoid(x) will be replaced by y_pred
 
-        return mean(
-            tf.nn.weighted_cross_entropy_with_logits(
-                targets=target, logits=output, pos_weight=pos_weight),
-            axis=-1)
+            # qz * -log(sigmoid(x)) 1e-6 is added as an epsilon to
+            # stop passing a zero into the log
+            x_1 = y_true * self.pos_weight * -tf.math.log(y_pred + 1e-6)
 
-    return _wbce
+            # (1 - z) * -log(1 - sigmoid(x)). Epsilon is added to
+            # prevent passing a zero into the log
+            x_2 = (1 - y_true) * -tf.math.log(1 - y_pred + 1e-6)
+
+            return tf.add(x_1, x_2) * self.weight
+
+        # Use built in function
+        return tf.nn.weighted_cross_entropy_with_logits(
+            y_true, y_pred, self.pos_weight) * self.weight
