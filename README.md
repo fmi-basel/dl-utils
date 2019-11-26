@@ -7,5 +7,4 @@ Dependencies can be installed with
 
 ```
 pip install --user -e dl-utils/
-conda install -c conda-forge hdbscan
 ```

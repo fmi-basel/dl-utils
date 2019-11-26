@@ -1,7 +1,7 @@
 from keras.layers import Conv2D, Conv3D
 from keras.engine import Model
 
-from dlutils.models.deeplab import aspp_block
+from dlutils.blocks.aspp import aspp_block
 from dlutils.layers.upsampling import BilinearUpSampling2D
 
 

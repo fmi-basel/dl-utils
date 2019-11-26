@@ -58,7 +58,7 @@ def unet_block(base_features, n_levels, n_blocks_per_level, dropout,
                     name=_get_name(prefix, level, 'C%d' % count),
                     **block_params)(x)
 
-            if dropout > 0.:
+            if dropout is not None and dropout > 0.:
                 x = Dropout(dropout, name=_get_name(prefix, level, 'DROP'))(x)
 
             links.append(x)
@@ -71,7 +71,7 @@ def unet_block(base_features, n_levels, n_blocks_per_level, dropout,
                 name=_get_name(prefix, n_levels - 1, 'C%d' % count),
                 **block_params)(x)
 
-        if dropout > 0.:
+        if dropout is not None and dropout > 0.:
             x = Dropout(
                 dropout, name=_get_name(prefix, n_levels - 1, 'DROP'))(x)
 
@@ -92,7 +92,7 @@ def unet_block(base_features, n_levels, n_blocks_per_level, dropout,
                     name=_get_name(prefix, level, 'C%d' % (count + 1)),
                     **block_params)(x)
 
-            if dropout > 0.:
+            if dropout is not None and dropout > 0.:
                 x = Dropout(dropout, name=_get_name(prefix, level, 'DROP'))(x)
         return x
 

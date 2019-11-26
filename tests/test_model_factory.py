@@ -20,7 +20,7 @@ def cleanup():
     "name,input_shape,n_levels,dropout",
     list(
         product(
-            ['unet', 'resnet', 'resnext'],
+            ['unet', ],
             [(259, 297, 1), (300, 313, 2)],  # input shapes
             [3, 5],  # n_levels
             [0, 0.05],  # dropout
