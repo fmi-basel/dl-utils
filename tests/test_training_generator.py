@@ -16,7 +16,7 @@ def cleanup():
     '''
     '''
     # make sure models are gone after each test.
-    from keras.backend import clear_session
+    from tensorflow.keras.backend import clear_session
     clear_session()
 
 

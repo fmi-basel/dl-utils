@@ -1,13 +1,13 @@
-from tensorflow.keras.engine.topology import get_source_inputs
+from tensorflow.keras.utils import get_source_inputs
 
-from tensorflow.keras.engine import Input
-from tensorflow.keras.engine import Model
+from tensorflow.keras.layers import Input
 from tensorflow.keras.layers import Convolution2D
 from tensorflow.keras.layers import MaxPooling2D
-from tensorflow.keras.layers import Deconvolution2D
+from tensorflow.keras.layers import Conv2DTranspose
 from tensorflow.keras.layers import Dropout
 from tensorflow.keras.layers import BatchNormalization
 from tensorflow.keras.layers import concatenate
+from tensorflow.keras.models import Model
 
 from dlutils.layers.padding import DynamicPaddingLayer, DynamicTrimmingLayer
 
@@ -32,7 +32,7 @@ def unet_block(base_features, n_levels, n_blocks_per_level, dropout,
     block_params.update(block_kwargs)
 
     pooling = MaxPooling2D
-    upsampling = Deconvolution2D
+    upsampling = Conv2DTranspose
 
     def features_from_level(level):
         features_out = base_features * 2**level

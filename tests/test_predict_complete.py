@@ -19,7 +19,7 @@ def cleanup():
     '''
     '''
     # make sure models are gone after each test.
-    from keras.backend import clear_session
+    from tensorflow.keras.backend import clear_session
     clear_session()
 
 
@@ -33,6 +33,8 @@ def test_predict_complete(input_shape, image_shape, border):
     '''
     batch_size = 1
     model = GenericUnetBase(input_shape=input_shape, n_levels=2, n_blocks=1)
+    model.summary(line_length=150)
+    
     pred_names = ['pred_cell', 'pred_border']
     model = add_fcn_output_layers(model, pred_names, [1, 1])
 

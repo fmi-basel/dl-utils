@@ -1,15 +1,15 @@
 from dlutils.training.lr_finder import lr_finder
 
-from keras.datasets import mnist
+from tensorflow.keras.datasets import mnist
 
-from keras.layers import Convolution2D
-from keras.layers import MaxPooling2D
-from keras.layers import Dense
-from keras.layers import Activation
-from keras.layers import Flatten
-from keras.models import Sequential
-from keras.layers import BatchNormalization
-from keras.utils import to_categorical
+from tensorflow.keras.layers import Convolution2D
+from tensorflow.keras.layers import MaxPooling2D
+from tensorflow.keras.layers import Dense
+from tensorflow.keras.layers import Activation
+from tensorflow.keras.layers import Flatten
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import BatchNormalization
+from tensorflow.keras.utils import to_categorical
 
 import numpy as np
 

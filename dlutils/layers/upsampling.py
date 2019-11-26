@@ -4,8 +4,9 @@ https://github.com/qqgeogor/keras-segmentation-networks/blob/master/deeplabv3.py
 
 '''
 from tensorflow.keras import backend as K
-from tensorflow.keras.engine import InputSpec
-from tensorflow.keras.engine.topology import Layer
+from tensorflow.keras.layers import InputSpec
+from tensorflow.keras.layers import Layer
+
 import tensorflow as tf
 
 
