@@ -1,3 +1,7 @@
+'''tf.data pipeline compatible cropping.
+
+'''
+
 import tensorflow as tf
 
 
