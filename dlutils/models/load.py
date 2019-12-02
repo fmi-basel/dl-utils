@@ -1,3 +1,6 @@
+import os
+import logging
+
 from tensorflow.keras.models import load_model as keras_load_model
 from tensorflow.keras.models import model_from_yaml, model_from_json
 
@@ -5,9 +8,6 @@ from dlutils.layers.dilated_conv import DilatedConv2D
 from dlutils.layers.upsampling import BilinearUpSampling2D
 from dlutils.layers.padding import DynamicPaddingLayer, DynamicTrimmingLayer
 from dlutils.layers.input_scaler import ScaleAndClipLayer
-
-import os
-import logging
 
 CUSTOM_LAYERS = {
     'DilatedConv2D': DilatedConv2D,
