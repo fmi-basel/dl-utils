@@ -2,8 +2,15 @@ import tensorflow as tf
 
 
 class ScaleAndClipLayer(tf.keras.layers.Layer):
-    '''statically rescales the input tensors values from [lower, upper] to [0, 1.]
-    and clips everything outside [0,1].
+    '''statically rescales the input tensors from [lower, upper] to [0, 1].
+    Everything outside [0,1] is clipped.
+
+    Parameters
+    ----------
+    lower : float
+        value to scale to 0. Values below will be clipped.
+    upper : float
+        value to scale to 1. Values above will be clipped.
 
     '''
 
