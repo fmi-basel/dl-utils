@@ -1,17 +1,13 @@
-name: dlutils package
+name: dlutils test
 
-on: 
-  pull_request:
-    branches:
-    - master
-
+on: [pull_request]
 jobs:
   build:
-    runs-on: ubuntu-18.04
+    runs-on: ubuntu-latest
     strategy:
       max-parallel: 1
       matrix:
-        python-version: [3.6, 3.7]
+        python-version: [3.6]
 
     steps:
     - uses: actions/checkout@v1
