@@ -7,6 +7,7 @@ from tensorflow.keras.layers import InputSpec
 from tensorflow.keras.layers import Layer
 
 import tensorflow as tf
+import numpy as np
 
 
 class DynamicPaddingLayer(Layer):
@@ -14,7 +15,6 @@ class DynamicPaddingLayer(Layer):
     are divisible by a given factor.
 
     '''
-
     def __init__(self, factor, ndim=4, data_format=None, **kwargs):
         '''
         '''
@@ -25,40 +25,37 @@ class DynamicPaddingLayer(Layer):
         self.ndim = ndim
         self.data_format = data_format
         self.input_spec = [InputSpec(ndim=self.ndim)]
-        self.factor = factor
-        # if self.data_format == 'channels_first':
-        #     self.target_size = (target_shape[2], target_shape[3])
-        # elif self.data_format == 'channels_last':
-        #     self.target_size = (target_shape[1], target_shape[2])
+        self.factor = np.broadcast_to(np.array(factor), ndim - 2)
         super(DynamicPaddingLayer, self).__init__(**kwargs)
 
-    def get_padded_dim(self, size):
+    def get_padded_dim(self, size, dim_factor):
         '''
         '''
         if size is None:
             return size
-        if size % self.factor == 0:
+        if size % dim_factor == 0:
             return size
-        return size + self.factor - size % self.factor
+        return size + dim_factor - size % dim_factor
 
-    def get_paddings(self, size):
+    def get_paddings(self, size, dim_factor):
         '''
         '''
-        dx = self.factor - size % self.factor
+        # last % operation takes care of the case where size is already divisible by factor
+        dx = (dim_factor - size % dim_factor) % dim_factor
         return [dx // 2, dx - dx // 2]
 
     def compute_output_shape(self, input_shape):
         '''
         '''
-        # TODO is this ever called?!
         ndim = len(input_shape)
         if self.data_format == 'channels_last':
             return (input_shape[0], ) + tuple(
-                self.get_padded_dim(input_shape[dim])
+                self.get_padded_dim(input_shape[dim], self.factor[dim - 1])
                 for dim in range(1, ndim - 1)) + (input_shape[-1], )
 
         return (input_shape[0], input_shape[1]) + tuple(
-            self.get_padded_dim(input_shape[dim]) for dim in range(2, ndim))
+            self.get_padded_dim(input_shape[dim], self.factor[dim - 2])
+            for dim in range(2, ndim))
 
     def call(self, inputs):
         '''
@@ -67,12 +64,13 @@ class DynamicPaddingLayer(Layer):
         ndim = K.ndim(inputs)
         if self.data_format == 'channels_last':
             paddings = [[0, 0]] + [
-                self.get_paddings(input_shape[dim])
+                self.get_paddings(input_shape[dim], self.factor[dim - 1])
                 for dim in range(1, ndim - 1)
             ] + [[0, 0]]
         else:
             paddings = [[0, 0], [0, 0]] + [
-                self.get_paddings(input_shape[dim]) for dim in range(2, ndim)
+                self.get_paddings(input_shape[dim], self.factor[dim - 2])
+                for dim in range(2, ndim)
             ]
 
         return tf.pad(inputs, paddings, 'CONSTANT')
@@ -92,7 +90,6 @@ class DynamicTrimmingLayer(Layer):
     as another.
 
     '''
-
     def __init__(self, ndim=4, data_format=None, dynamic=True, **kwargs):
         '''
         '''
@@ -134,9 +131,9 @@ class DynamicTrimmingLayer(Layer):
         output_shape = output_tensor.shape
         original_shape = inputs[0].shape
 
-        dx = [(x - y) // 2 for x, y in ((output_shape[idx],
-                                         original_shape[idx])
-                                        for idx in range(self.ndim))]
+        dx = [(x - y) // 2
+              for x, y in ((output_shape[idx], original_shape[idx])
+                           for idx in range(self.ndim))]
 
         if self.data_format == 'channels_last':
             starts = [0] + dx[1:-1] + [0]
