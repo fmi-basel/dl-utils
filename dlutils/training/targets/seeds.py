@@ -5,6 +5,9 @@ from scipy.spatial.distance import cdist
 from skimage.morphology import thin, skeletonize, skeletonize_3d
 
 import numpy as np
+from scipy.ndimage import find_objects
+
+from dlutils.preprocessing.normalization import min_max_scaling
 
 # TODO optimize speed (place vs filter)
 
@@ -43,7 +46,7 @@ def generate_seed_map(segmentation, sampling=1.0, sigma=1.5):
     # ~ gkern1d = gaussian(kernel_size, std=sigma)
     # ~ gkern = np.matmul(gkern1d.reshape(-1,1), gkern1d.reshape(1,-1))
     # ~ if segmentation.ndim == 3:
-        # ~ gkern = np.matmul(gkern.reshape(kernel_size,kernel_size,1), gkern1d.reshape(1,1,-1))
+    # ~ gkern = np.matmul(gkern.reshape(kernel_size,kernel_size,1), gkern1d.reshape(1,1,-1))
 
     seed_map = np.zeros_like(segmentation, dtype=np.float32)
     for label in np.unique(segmentation):
@@ -55,9 +58,10 @@ def generate_seed_map(segmentation, sampling=1.0, sigma=1.5):
             skeleton = np.argwhere(skeleton) + offset
             center_mass = center_of_mass(segmentation[loc] == label)
             center_mass = np.asarray(center_mass) + offset
-            if skeleton.shape[0] > 0:  # skeletonize_3d sometimes return empty image??
-                dist_to_center_mass = cdist(
-                    [center_mass], skeleton, 'euclidean')
+            if skeleton.shape[
+                    0] > 0:  # skeletonize_3d sometimes return empty image??
+                dist_to_center_mass = cdist([center_mass], skeleton,
+                                            'euclidean')
                 # .reshape(2,1)
                 center = skeleton[np.argmin(dist_to_center_mass)]
             else:
