@@ -25,7 +25,8 @@ class DynamicPaddingLayer(Layer):
         self.ndim = ndim
         self.data_format = data_format
         self.input_spec = [InputSpec(ndim=self.ndim)]
-        self.factor = np.broadcast_to(np.array(factor), ndim - 2)
+        self.factor = tuple(
+            np.broadcast_to(np.array(factor), ndim - 2).tolist())
         super(DynamicPaddingLayer, self).__init__(**kwargs)
 
     def get_padded_dim(self, size, dim_factor):
@@ -76,13 +77,12 @@ class DynamicPaddingLayer(Layer):
         return tf.pad(inputs, paddings, 'CONSTANT')
 
     def get_config(self):
-        config = {
-            'factor': self.factor,
-            'data_format': self.data_format,
-            'ndim': self.ndim
-        }
-        base_config = super(DynamicPaddingLayer, self).get_config()
-        return dict(list(base_config.items()) + list(config.items()))
+        config = super().get_config()
+        config['factor'] = tuple(self.factor)
+        config['data_format'] = self.data_format
+        config['ndim'] = self.ndim
+
+        return config
 
 
 class DynamicTrimmingLayer(Layer):
@@ -107,9 +107,11 @@ class DynamicTrimmingLayer(Layer):
         super(DynamicTrimmingLayer, self).__init__(dynamic=dynamic, **kwargs)
 
     def get_config(self):
-        config = {'data_format': self.data_format, 'ndim': self.ndim}
-        base_config = super(DynamicTrimmingLayer, self).get_config()
-        return dict(list(base_config.items()) + list(config.items()))
+        config = super().get_config()
+        config['data_format'] = self.data_format
+        config['ndim'] = self.ndim
+
+        return config
 
     def compute_output_shape(self, input_shape):
         '''
