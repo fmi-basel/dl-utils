@@ -51,3 +51,40 @@ def test_dynamic_trimming(original_shape, data_format, input_shape):
     output_tensor = layer([orignal_tensor, input_tensor])
 
     assert output_tensor.shape == original_shape
+
+
+def build_custom_model(shape, data_format):
+    '''keras model wrapped with two custom layers from dlutils.
+
+    '''
+    input = tf.keras.layers.Input(shape)
+    x = input
+    x = DynamicPaddingLayer(factor=2, data_format=data_format)(input)
+    x = tf.keras.layers.Conv2D(32,
+                               kernel_size=3,
+                               activation='relu',
+                               padding='same',
+                               data_format=data_format)(x)
+    x = DynamicTrimmingLayer(data_format=data_format)([input, x])
+    x = tf.keras.layers.Conv2D(32,
+                               kernel_size=3,
+                               activation='relu',
+                               padding='same',
+                               data_format=data_format)(x)
+
+    return tf.keras.models.Model(inputs=input, outputs=[x])
+
+
+@pytest.mark.parametrize(
+    'tensor_shape, input_shape, data_format, expected_output_shape',
+    [((4, 63, 52, 3), (None, None, 3), 'channels_last', (4, 63, 52, 32)),
+     ((4, 3, 63, 52), (3, None, None), 'channels_first', (4, 32, 63, 52))])
+def test_dynamic_trimming_output_shape(tensor_shape, input_shape, data_format,
+                                       expected_output_shape):
+    '''Test that a trimming layer can be used in a model with
+    additional layer afterwards'''
+
+    model = build_custom_model(input_shape, data_format)
+    input_tensor = tf.random.normal(tensor_shape)
+    output_tensor = model(input_tensor)
+    assert output_tensor.shape == expected_output_shape
