@@ -76,9 +76,11 @@ def build_custom_model(shape, data_format):
 
 
 @pytest.mark.parametrize(
-    'tensor_shape, input_shape, data_format, expected_output_shape',
-    [((4, 63, 52, 3), (None, None, 3), 'channels_last', (4, 63, 52, 32)),
-     ((4, 3, 63, 52), (3, None, None), 'channels_first', (4, 32, 63, 52))])
+    'tensor_shape, input_shape, data_format, expected_output_shape', [
+        ((4, 63, 52, 3), (None, None, 3), 'channels_last', (4, 63, 52, 32)),
+    ])
+# Note: conv with channels_first not supported on cpu
+# ((4, 3, 63, 52), (3, None, None), 'channels_first', (4, 32, 63, 52))])
 def test_dynamic_trimming_output_shape(tensor_shape, input_shape, data_format,
                                        expected_output_shape):
     '''Test that a trimming layer can be used in a model with
