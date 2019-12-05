@@ -90,7 +90,7 @@ class DynamicTrimmingLayer(Layer):
     as another.
 
     '''
-    def __init__(self, ndim=4, data_format=None, dynamic=True, **kwargs):
+    def __init__(self, ndim=4, data_format=None, **kwargs):
         '''
         '''
 
@@ -104,7 +104,7 @@ class DynamicTrimmingLayer(Layer):
             InputSpec(ndim=self.ndim),
             InputSpec(ndim=self.ndim)
         ]
-        super(DynamicTrimmingLayer, self).__init__(dynamic=dynamic, **kwargs)
+        super(DynamicTrimmingLayer, self).__init__(**kwargs)
 
     def get_config(self):
         config = super().get_config()
@@ -130,8 +130,8 @@ class DynamicTrimmingLayer(Layer):
         '''
         assert len(inputs) == 2
         output_tensor = inputs[1]
-        output_shape = output_tensor.shape
-        original_shape = inputs[0].shape
+        output_shape = tf.shape(output_tensor)
+        original_shape = tf.shape(inputs[0])
 
         dx = [(x - y) // 2
               for x, y in ((output_shape[idx], original_shape[idx])
@@ -147,4 +147,10 @@ class DynamicTrimmingLayer(Layer):
             ends = [-1, -1
                     ] + [original_shape[idx] for idx in range(2, self.ndim)]
 
-        return tf.slice(output_tensor, starts, ends)
+        trimmed_tensor = tf.slice(output_tensor, starts, ends)
+
+        # manually set the shape that has been "lost" by tf.slice
+        trimmed_tensor.set_shape(
+            self.compute_output_shape([input.shape for input in inputs]))
+
+        return trimmed_tensor
