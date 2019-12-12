@@ -13,7 +13,6 @@ def weighted_l1_loss():
     - implemented as channels_last
 
     '''
-
     def loss(y_true, y_pred):
         '''
         '''
@@ -22,9 +21,10 @@ def weighted_l1_loss():
         y_true = y_true[..., 0:-1]
 
         loss = K.abs(y_pred - y_true)
-        loss = K.sum(loss * weights)
-
-        return loss / K.cast(y_pred.shape[-1], K.floatx())
+        # sum over spatial dims, mean over batch and channel dims
+        loss = tf.math.reduce_sum(loss * weights,
+                                  axis=tuple(range(1, len(y_pred.shape))))
+        return tf.math.reduce_mean(loss)
 
     return loss
 
@@ -39,7 +39,6 @@ def weighted_l2_loss():
     - implemented as channels_last
 
     '''
-
     def loss(y_true, y_pred):
         '''
         '''
@@ -48,9 +47,10 @@ def weighted_l2_loss():
         y_true = y_true[..., 0:-1]
 
         loss = K.square(y_pred - y_true)
-        loss = K.sum(loss * weights)
-
-        return loss / K.cast(y_pred.shape[-1], K.floatx())
+        # sum over spatial dims, mean over batch and channel dims
+        loss = tf.math.reduce_sum(loss * weights,
+                                  axis=tuple(range(1, len(y_pred.shape))))
+        return tf.math.reduce_mean(loss)
 
     return loss
 
@@ -74,8 +74,9 @@ def weighted_binary_crossentropy(from_logits=False):
         y_true = y_true[..., 0:-1]
 
         loss = K.binary_crossentropy(y_true, y_pred, from_logits=from_logits)
-        loss = K.sum(loss * weights)
-
-        return loss / K.cast(y_pred.shape[-1], K.floatx())
+        # sum over spatial dims, mean over batch and channel dims
+        loss = tf.math.reduce_sum(loss * weights,
+                                  axis=tuple(range(1, len(y_pred.shape))))
+        return tf.math.reduce_mean(loss)
 
     return loss
