@@ -96,16 +96,16 @@ def test_delta_loop():
     input_tensor = tf.random.normal((3, 128, 128, 3))
 
     # without initial state
-    output_tensor = recur_block(input_tensor)
+    output_tensor, deltas = recur_block(input_tensor)
     assert output_tensor.shape == (n_steps, 3, 128, 128, 1)
 
     # with initial state
     state = tf.zeros((3, 128, 128, 1), input_tensor.dtype)
-    output_tensor = recur_block(input_tensor, state=state)
+    output_tensor, deltas = recur_block(input_tensor, state=state)
     assert output_tensor.shape == (n_steps, 3, 128, 128, 1)
 
     # with extra iterations
-    output_tensor = recur_block(input_tensor, n_steps=n_steps + 1)
+    output_tensor, deltas = recur_block(input_tensor, n_steps=n_steps + 1)
     assert output_tensor.shape == (n_steps + 1, 3, 128, 128, 1)
 
 
@@ -146,7 +146,7 @@ def test_GenericRecurrentHourglassBase(tmpdir, input_shape, output_channels,
     model.save_weights(str(weights_path))
 
     input_tensor = tf.random.normal(input_shape)
-    outputs = model(input_tensor)
+    outputs, deltas = model(input_tensor)
     assert outputs.shape == (n_steps, ) + input_shape[:-1] + (
         output_channels, )
 
@@ -166,7 +166,7 @@ def test_GenericRecurrentHourglassBase(tmpdir, input_shape, output_channels,
     model2.load_weights(str(weights_path))
     state = tf.zeros(input_shape[:-1] + (output_channels, ),
                      input_tensor.dtype)
-    outputs = model2([input_tensor, state])
+    outputs, deltas = model2([input_tensor, state])
     assert outputs.shape == (n_steps, ) + input_shape[:-1] + (
         output_channels, )
 
@@ -185,7 +185,7 @@ def test_GenericRecurrentHourglassBase(tmpdir, input_shape, output_channels,
         spacing=spacing,
         norm_groups=4)
     model3.load_weights(str(weights_path))
-    outputs = model3(input_tensor)
+    outputs, deltas = model3(input_tensor)
 
     assert outputs.shape == (n_steps +
                              2, ) + input_shape[:-1] + (output_channels, )
@@ -241,10 +241,10 @@ def test_training_GenericRecurrentHourglassBase(tmpdir):
 
     model.compile(
         optimizer=tf.keras.optimizers.Adam(learning_rate=0.001),
-        loss=supervision_loss,
+        loss=[supervision_loss, None],
     )
 
-    outputs_init = model(input_tensor)
+    outputs_init, deltas = model(input_tensor)
     loss_init = supervision_loss(target, outputs_init)
     assert outputs_init.shape == (3, 4, 122, 128, 1)
 
@@ -257,7 +257,7 @@ def test_training_GenericRecurrentHourglassBase(tmpdir):
         validation_steps=1,
     )
 
-    outputs_trained = model(input_tensor)
+    outputs_trained, deltas = model(input_tensor)
     loss_trained = supervision_loss(target, outputs_trained)
     assert outputs_trained.shape == (3, 4, 122, 128, 1)
 
@@ -274,7 +274,7 @@ def test_training_GenericRecurrentHourglassBase(tmpdir):
                                                   supervision_loss
                                               })
 
-    outputs_reloaded = loaded_model(input_tensor)
+    outputs_reloaded, deltas = loaded_model(input_tensor)
     loss_reloaded = supervision_loss(target, outputs_reloaded)
     assert outputs_reloaded.shape == (3, 4, 122, 128, 1)
 

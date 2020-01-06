@@ -230,25 +230,27 @@ def delta_loop(output_channels, recurrent_block, default_n_steps=3):
         # dynamic alternative ##########################################
         i = tf.constant(0)
         outputs = tf.TensorArray(tf.float32, size=n_steps)
+        deltas = tf.TensorArray(tf.float32, size=n_steps)
 
-        def cond(i, outputs, state):
+        def cond(i, outputs, deltas, state):
             return tf.less(i, n_steps)
 
-        def body(i, outputs, state):
+        def body(i, outputs, deltas, state):
             delta = recurrent_block(tf.concat([x, state], axis=-1))
             state = state + delta
+
+            deltas = deltas.write(i, delta)
             outputs = outputs.write(i, state)
 
             i = tf.add(i, 1)
-            return (i, outputs, state)
+            return (i, outputs, deltas, state)
 
-        i, outputs, state = tf.while_loop(cond,
-                                          body, [i, outputs, state],
-                                          swap_memory=True)
+        i, outputs, deltas, state = tf.while_loop(cond,
+                                                  body,
+                                                  [i, outputs, deltas, state],
+                                                  swap_memory=True)
 
-        outputs = outputs.stack()
-
-        return outputs
+        return outputs.stack(), deltas.stack()
 
     return block
 
@@ -297,17 +299,22 @@ def GenericRecurrentHourglassBase(input_shape,
     r_hglass = delta_loop(output_channels, hglass, default_n_steps)
     output_trimming = DynamicTrimmingLayer(ndim=spatial_dims + 2)
 
+    def trim_stack(x, stack):
+        '''Trims a stack of intermediates outputs one by one'''
+        tensors = [output_trimming([x, sl]) for sl in stack]
+        return tf.stack(tensors)
+
     # TODO is it possible to change n_steps and initial state at run time? (i.e. have optional inputs/attributes)
     if external_init_state is False:
         x = Input(shape=input_shape)
 
         y = input_padding(x)
-        y = r_hglass(y)
-        y = [output_trimming([x, single_iter_y]) for single_iter_y in y]
-        y = tf.stack(y)
+        y, deltas = r_hglass(y)
+        y = trim_stack(x, y)
+        deltas = trim_stack(x, deltas)
 
         return Model(inputs=[x],
-                     outputs=[y],
+                     outputs=[y, deltas],
                      name=get_model_name(n_levels, channels, channels_growth,
                                          output_channels, spatial_dims,
                                          spacing))
@@ -318,12 +325,13 @@ def GenericRecurrentHourglassBase(input_shape,
 
         y = input_padding(x)
         padded_state = input_padding(state)
-        y = r_hglass(y, padded_state)
-        y = [output_trimming([x, single_iter_y]) for single_iter_y in y]
-        y = tf.stack(y, axis=0)
+        y, deltas = r_hglass(y, padded_state)
+
+        y = trim_stack(x, y)
+        deltas = trim_stack(x, deltas)
 
         return Model(inputs=[x, state],
-                     outputs=[y],
+                     outputs=[y, deltas],
                      name=get_model_name(n_levels, channels, channels_growth,
                                          output_channels, spatial_dims,
                                          spacing))
