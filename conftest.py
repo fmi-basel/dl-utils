@@ -1,6 +1,12 @@
-import pytest
+'''
+Local per-directory pytest plugins. See https://docs.pytest.org/en/2.7.3/plugins.html
 
-# https://docs.pytest.org/en/latest/example/simple.html
+The argument "runslow" provides the option to ignore tests marked as 
+"slow" when running the pytest suite. 
+See https://docs.pytest.org/en/latest/example/simple.html for more information.
+'''
+
+import pytest
 
 
 def pytest_addoption(parser):
