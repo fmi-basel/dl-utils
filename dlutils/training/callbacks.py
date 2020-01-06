@@ -55,6 +55,7 @@ def create_callbacks(outdir,
                      restart_decay=1.0,
                      debug=False,
                      best_monitor='val_loss',
+                     monitor_mode='auto',
                      csv_append=False):
     '''Add basic callbacks for training.
 
@@ -91,7 +92,8 @@ def create_callbacks(outdir,
         ModelCheckpoint(os.path.join(outdir, 'model_best.h5'),
                         save_best_only=True,
                         save_weights_only=True,
-                        monitor=best_monitor))
+                        monitor=best_monitor,
+                        mode=monitor_mode))
     if nth_checkpoint < epochs:
         callbacks.append(
             ModelCheckpoint(
