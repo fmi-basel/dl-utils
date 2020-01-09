@@ -51,7 +51,7 @@ def test_hourglass_block():
                               channels=32,
                               channels_growth=2,
                               spatial_dims=2,
-                              pooling_interval=1)
+                              spacing=1)
 
     input_tensor = tf.random.normal((3, 128, 128, 32))
     output_tensor = b_block(input_tensor)
@@ -68,7 +68,7 @@ def test_single_hourglass():
                               channels=32,
                               channels_growth=2,
                               spatial_dims=2,
-                              pooling_interval=1,
+                              spacing=1,
                               norm_groups=4)
 
     input_tensor = tf.random.normal((3, 128, 128, 1))
@@ -87,7 +87,7 @@ def test_delta_loop():
                               channels=32,
                               channels_growth=2,
                               spatial_dims=2,
-                              pooling_interval=1,
+                              spacing=1,
                               norm_groups=4)
     recur_block = delta_loop(output_channels=1,
                              recurrent_block=hglass,

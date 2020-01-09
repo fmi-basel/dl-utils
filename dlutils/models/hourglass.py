@@ -16,6 +16,7 @@ from tensorflow_addons.layers import GroupNormalization
 
 from dlutils.layers.nd_layers import get_nd_conv, get_nd_maxpooling, get_nd_upsampling
 from dlutils.layers.padding import DynamicPaddingLayer, DynamicTrimmingLayer
+from dlutils.models.utils import anisotropic_kernel_size, n_anisotropic_ops
 
 Activation = LeakyReLU
 
@@ -78,12 +79,9 @@ def hourglass_block(
         channels=32,
         channels_growth=2,
         spatial_dims=2,
-        pooling_interval=1,
+        spacing=1,
         norm_groups=4,
 ):
-    pooling_interval = np.broadcast_to(np.array(pooling_interval),
-                                       spatial_dims)
-
     Conv = get_nd_conv(spatial_dims)
     MaxPool = get_nd_maxpooling(spatial_dims)
     UpSampling = get_nd_upsampling(spatial_dims)
@@ -121,10 +119,11 @@ def hourglass_block(
     ]
 
     pools = [
-        MaxPool((l % pooling_interval == 0) + 1) for l in range(1, n_levels)
+        MaxPool(anisotropic_kernel_size(spacing, l, n_levels))
+        for l in range(1, n_levels)
     ]
     upsamples = [
-        UpSampling((l % pooling_interval == 0) + 1)
+        UpSampling(anisotropic_kernel_size(spacing, l, n_levels))
         for l in range(1, n_levels)
     ]
 
@@ -164,14 +163,14 @@ def single_hourglass(output_channels,
                      channels=32,
                      channels_growth=2,
                      spatial_dims=2,
-                     pooling_interval=1,
+                     spacing=1,
                      norm_groups=4):
     '''Combines an hourglass block with input/output blocks to 
     increase/decrease the number of channels.
     
     Notes:
-    Expects the input to be divisible by 2**((n_levels-1)//pooling_interval)
-    (i.e. already padded)'''
+    Expects the input to be already padded)
+    '''
 
     Conv = get_nd_conv(spatial_dims)
 
@@ -179,7 +178,7 @@ def single_hourglass(output_channels,
         Conv(channels, kernel_size=1, padding='same'),
         bottleneck_conv_block(channels, spatial_dims, norm_groups),
         hourglass_block(n_levels, channels, channels_growth, spatial_dims,
-                        pooling_interval, norm_groups),
+                        spacing, norm_groups),
         bottleneck_conv_block(channels, spatial_dims, norm_groups),
         Activation(),
         GroupNormalization(groups=norm_groups, axis=-1),
@@ -315,15 +314,12 @@ def GenericRecurrentHourglassBase(input_shape,
     will alternate between (1,2,2) and (2,2,2)
     '''
 
-    # approximate isotropic field of view by adjusting pooling interval
-    spacing = np.broadcast_to(np.array(spacing), spatial_dims)
-    normalized_spacing = spacing / spacing.min()
-    pooling_interval = (np.floor(np.log2(normalized_spacing)) + 1).astype(int)
-    factor = 2**((n_levels - 1) // pooling_interval)
-
+    n_not_pooling = n_anisotropic_ops(spacing, base=2)
+    factor = 2**np.maximum(0, ((n_levels - 1) - n_not_pooling))
     input_padding = DynamicPaddingLayer(factor=factor, ndim=spatial_dims + 2)
+
     hglass = single_hourglass(output_channels, n_levels, channels,
-                              channels_growth, spatial_dims, pooling_interval,
+                              channels_growth, spatial_dims, spacing,
                               norm_groups)
     r_hglass = delta_loop(output_channels, hglass, default_n_steps)
     output_trimming = DynamicTrimmingLayer(ndim=spatial_dims + 2)
