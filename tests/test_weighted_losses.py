@@ -3,10 +3,12 @@ import tensorflow as tf
 import numpy as np
 from sklearn.metrics import log_loss
 
-from dlutils.losses.weighted_losses import weighted_l1_loss, weighted_l2_loss, weighted_binary_crossentropy
+from dlutils.losses.weighted_losses import PixelWeightedL1Loss, PixelWeightedMSE, PixelWeightedBinaryCrossentropy
 
 
 def dummy_data(bool_groundtruth=False):
+
+    np.random.seed(8)
 
     yt_val = np.random.rand(10, 10)
     if bool_groundtruth:
@@ -25,7 +27,7 @@ def dummy_data(bool_groundtruth=False):
     return y_true.astype(np.float32), y_pred.astype(np.float32)
 
 
-def batch_size_check(loss_func, batch_size, yt, yp):
+def broadcast_to_batch_and_evaluate(loss_func, batch_size, yt, yp):
 
     yt = np.broadcast_to(yt, (batch_size, ) + yt.shape[1:])
     yp = np.broadcast_to(yp, (batch_size, ) + yp.shape[1:])
@@ -33,36 +35,38 @@ def batch_size_check(loss_func, batch_size, yt, yp):
     return loss_func(tf.convert_to_tensor(yt), tf.convert_to_tensor(yp))
 
 
-def test_weighted_l1_loss():
+def test_PixelWeightedL1Loss():
     '''
     '''
-    loss_func = weighted_l1_loss()
+    loss_func = PixelWeightedL1Loss()
     yt, yp = dummy_data()
 
     loss_np = (np.abs(yt[..., 0:1] - yp) * yt[..., 1:]).sum()
 
     for batch_size in [1, 3, 10]:
-        loss_tf = batch_size_check(loss_func, batch_size, yt, yp)
+        loss_tf = broadcast_to_batch_and_evaluate(loss_func, batch_size, yt,
+                                                  yp)
         np.testing.assert_almost_equal(loss_tf, loss_np, decimal=5)
 
 
-def test_weighted_l2_loss():
+def test_PixelWeightedMSE():
     '''
     '''
-    loss_func = weighted_l2_loss()
+    loss_func = PixelWeightedMSE()
     yt, yp = dummy_data()
 
     loss_np = (np.square(yt[..., 0:1] - yp) * yt[..., 1:]).sum()
 
     for batch_size in [1, 3, 10]:
-        loss_tf = batch_size_check(loss_func, batch_size, yt, yp)
+        loss_tf = broadcast_to_batch_and_evaluate(loss_func, batch_size, yt,
+                                                  yp)
         np.testing.assert_almost_equal(loss_tf, loss_np, decimal=5)
 
 
-def test_weighted_binary_crossentropy_loss():
+def test_PixelWeightedBinaryCrossentropy():
     '''
     '''
-    loss_func = weighted_binary_crossentropy(from_logits=False)
+    loss_func = PixelWeightedBinaryCrossentropy(from_logits=False)
     yt, yp = dummy_data(bool_groundtruth=True)
 
     loss_np = log_loss(yt[..., 0].flat,
@@ -70,5 +74,6 @@ def test_weighted_binary_crossentropy_loss():
                        sample_weight=yt[..., 1:].flat)
 
     for batch_size in [1, 3, 10]:
-        loss_tf = batch_size_check(loss_func, batch_size, yt, yp)
+        loss_tf = broadcast_to_batch_and_evaluate(loss_func, batch_size, yt,
+                                                  yp)
         np.testing.assert_almost_equal(loss_tf, loss_np, decimal=5)
