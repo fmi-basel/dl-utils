@@ -285,6 +285,35 @@ def GenericRecurrentHourglassBase(input_shape,
                                   spatial_dims=2,
                                   spacing=1,
                                   norm_groups=4):
+    '''Constructs a hourglass/U-net like network
+    
+    Args:
+        input_shape: at least the number of channels should be defined
+        output_channels: number of output channels in the last layer
+        external_init_state: if True, the network will take a second input 
+            to initialize the recurrent state (default tf.zeros)
+        default_n_steps: number of times the network is recurrently applied
+        n_levels: ~ depth of the network, also corresponds to the number
+            of pooling layers
+        channels: number of channels of the first layer
+        channels_growth: channel multiplication factor for subsequent layers.
+            1 - fixed number of channels as in hourglass, 
+            2 - double each layer as in U-net
+            Note that the exact number of channels will be floored to be 
+            divisible by 2*norm_groups
+        spatial_dims: number of spatial dimensions, 2 or 3
+        spacing: pixel/voxel's size
+        norm_groups: number of normalization groups of groupnorm layers
+        
+    Notes:
+    if anisotropic spacing is provided, the pooling size will be 2 along
+    the dimension with the smallest spacing and 1 or 2 along the other 
+    dimension(s) depending on the layer, so as to approximate an isotropic 
+    field of view.
+    
+    For examples for a doubled z spacing: (0.5,0.25,0.25) the pooling size
+    will alternate between (1,2,2) and (2,2,2)
+    '''
 
     # approximate isotropic field of view by adjusting pooling interval
     spacing = np.broadcast_to(np.array(spacing), spatial_dims)
