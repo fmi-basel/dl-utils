@@ -3,12 +3,12 @@ import pytest
 import numpy as np
 from itertools import product
 
-from dlutils.losses.recursive_loss import recursive_loss
+from dlutils.losses.recursive_loss import RecursiveLoss
 
 
 @pytest.mark.parametrize("n_steps, n_channels, alpha",
                          list(product([1, 3, 7], [1, 3], [0.4, 1., 1.5])))
-def test_recursive_loss(n_steps, n_channels, alpha):
+def test_RecursiveLoss(n_steps, n_channels, alpha):
 
     loss_fun = tf.keras.losses.MeanSquaredError()
 
@@ -24,15 +24,15 @@ def test_recursive_loss(n_steps, n_channels, alpha):
         [alpha**(n_steps - (idx + 1)) for idx in range(len(y_preds))])
     manual_loss /= wg_scaling
 
-    r_loss = recursive_loss(loss_fun, alpha)(y_true, y_preds)
+    r_loss = RecursiveLoss(loss_fun, alpha)(y_true, y_preds)
     np.testing.assert_almost_equal(manual_loss.numpy(),
                                    r_loss.numpy(),
                                    decimal=5)
 
     # simulate y_reds rank change (squeeze) by keras model.fit
     if n_channels == 1:
-        r_loss = recursive_loss(loss_fun, alpha)(y_true,
-                                                 tf.squeeze(y_preds, axis=-1))
+        r_loss = RecursiveLoss(loss_fun, alpha)(y_true,
+                                                tf.squeeze(y_preds, axis=-1))
         np.testing.assert_almost_equal(manual_loss.numpy(),
                                        r_loss.numpy(),
                                        decimal=5)
