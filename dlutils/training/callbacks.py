@@ -100,6 +100,7 @@ def create_callbacks(outdir,
                 os.path.join(outdir, 'model_{epoch:04}.h5'),
                 period=
                 nth_checkpoint,  # TODO `period` argument is deprecated. Please use `save_freq` to specify the frequency in number of samples seen.
+                # WARNING meaning of 'save_freq' is different from 'period' --> e.g. save_freq=1 would save after every mini-batch
                 save_weights_only=True))
     callbacks.append(
         CSVLogger(os.path.join(outdir, 'training.log'),
