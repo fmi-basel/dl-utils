@@ -66,7 +66,8 @@ def get_input_channels(model):
 
 
 def n_anisotropic_ops(spacing, base=2):
-    '''Computes the number operations to skip along each axis to approximate an isotropic field of view.
+    '''Computes the number operations to skip along each axis to 
+    approximate an isotropic field of view.
     '''
     def _np_log_n(x, base):
         return np.log(x) / np.log(base)

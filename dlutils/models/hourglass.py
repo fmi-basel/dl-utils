@@ -311,7 +311,7 @@ def GenericRecurrentHourglassBase(input_shape,
     field of view.
     
     For examples for a doubled z spacing: (0.5,0.25,0.25) the pooling size
-    will alternate between (1,2,2) and (2,2,2)
+    will be (1,2,2) for the first layer and (2,2,2) for the remaining ones
     '''
 
     n_not_pooling = n_anisotropic_ops(spacing, base=2)
