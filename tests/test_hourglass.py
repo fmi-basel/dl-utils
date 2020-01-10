@@ -6,6 +6,26 @@ from itertools import product
 from dlutils.models.hourglass import bottleneck_conv_block, hourglass_block, single_hourglass, delta_loop, GenericRecurrentHourglassBase
 from dlutils.layers.padding import DynamicPaddingLayer, DynamicTrimmingLayer
 
+PARAMS_2D = list(
+    product(
+        [(3, 122, 128, 3), (3, 43, 67, 1)],  # input_shape
+        [1, 3],  # output_channels
+        [2, 4],  # n_levels
+        [8, 16],  # channels
+        [1, 1.5, 2],  # channels_growth
+        [2],  # spatial_dims
+        [1]))  # spacing
+
+PARAMS_3D = list(
+    product(
+        [(3, 16, 122, 128, 3)],  # input_shape
+        [1, 3],  # output_channels
+        [2, 4],  # n_levels
+        [8, 16],  # channels
+        [1, 2],  # channels_growth
+        [3],  # spatial_dims
+        [1, (7, 1, 1)]))  # spacing
+
 
 def test_bottleneck_block():
     '''test bottleneck block instantiation and feed forward
@@ -109,15 +129,9 @@ def test_delta_loop():
     assert output_tensor.shape == (n_steps + 1, 3, 128, 128, 1)
 
 
-params_2d = list(
-    product([(3, 122, 128, 3), (3, 43, 67, 1)], [1, 3], [2, 4], [8, 16],
-            [1, 1.5, 2], [2], [1]))
-params_3d = list(
-    product([(3, 16, 122, 128, 3)], [1, 3], [2, 4], [8, 16], [1, 2], [3],
-            [1, (7, 1, 1)]))
 hglass_options = [
     pytest.param(*p, marks=pytest.mark.slow) if idx > 0 else p
-    for idx, p in enumerate(params_2d + params_3d)
+    for idx, p in enumerate(PARAMS_2D + PARAMS_3D)
 ]
 
 
