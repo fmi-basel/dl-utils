@@ -330,33 +330,24 @@ def GenericRecurrentHourglassBase(input_shape,
         return tf.stack(tensors)
 
     # TODO is it possible to change n_steps and initial state at run time? (i.e. have optional inputs/attributes)
+    x = Input(shape=input_shape)
+    y = input_padding(x)
+
     if external_init_state is False:
-        x = Input(shape=input_shape)
-
-        y = input_padding(x)
+        inputs = [x]
         y, deltas = r_hglass(y)
-        y = trim_stack(x, y)
-        deltas = trim_stack(x, deltas)
-
-        return Model(inputs=[x],
-                     outputs=[y, deltas],
-                     name=get_model_name(n_levels, channels, channels_growth,
-                                         output_channels, spatial_dims,
-                                         spacing))
 
     else:
-        x = Input(shape=input_shape)
         state = Input(shape=input_shape[:-1] + (output_channels, ))
+        inputs = [x, state]
 
-        y = input_padding(x)
         padded_state = input_padding(state)
         y, deltas = r_hglass(y, padded_state)
 
-        y = trim_stack(x, y)
-        deltas = trim_stack(x, deltas)
+    y = trim_stack(x, y)
+    deltas = trim_stack(x, deltas)
 
-        return Model(inputs=[x, state],
-                     outputs=[y, deltas],
-                     name=get_model_name(n_levels, channels, channels_growth,
-                                         output_channels, spatial_dims,
-                                         spacing))
+    return Model(inputs=inputs,
+                 outputs=[y, deltas],
+                 name=get_model_name(n_levels, channels, channels_growth,
+                                     output_channels, spatial_dims, spacing))
