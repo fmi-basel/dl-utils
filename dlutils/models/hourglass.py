@@ -119,12 +119,12 @@ def hourglass_block(
     ]
 
     pools = [
-        MaxPool(anisotropic_kernel_size(spacing, l, n_levels))
-        for l in range(1, n_levels)
+        MaxPool(anisotropic_kernel_size(spacing, l, n_levels - 1))
+        for l in range(0, n_levels - 1)
     ]
     upsamples = [
-        UpSampling(anisotropic_kernel_size(spacing, l, n_levels))
-        for l in range(1, n_levels)
+        UpSampling(anisotropic_kernel_size(spacing, l, n_levels - 1))
+        for l in range(0, n_levels - 1)
     ]
 
     def block(x):
