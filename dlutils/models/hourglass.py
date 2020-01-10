@@ -305,7 +305,6 @@ def GenericRecurrentHourglassBase(input_shape,
         norm_groups: number of normalization groups of groupnorm layers
         
     Notes:
-    - Anisotropic pooling
     if anisotropic spacing is provided, the pooling size will be 2 along
     the dimension with the smallest spacing and 1 or 2 along the other 
     dimension(s) depending on the layer, so as to approximate an isotropic 
@@ -313,13 +312,6 @@ def GenericRecurrentHourglassBase(input_shape,
     
     For examples for a doubled z spacing: (0.5,0.25,0.25) the pooling size
     will be (1,2,2) for the first layer and (2,2,2) for the remaining ones
-    
-    - Saving and reloading the model
-    Saved weights should be loaded in a newly instantiated model. it allows
-    changing the number of iterations as well as adding/removing input for 
-    intial state without retraining a model.
-    This is also a workaround the current issue with reloading yaml files with
-    nested structures.
     '''
 
     n_not_pooling = n_anisotropic_ops(spacing, base=2)
