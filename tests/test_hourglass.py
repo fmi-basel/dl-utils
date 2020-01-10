@@ -8,7 +8,7 @@ from dlutils.layers.padding import DynamicPaddingLayer, DynamicTrimmingLayer
 
 PARAMS_2D = list(
     product(
-        [(3, 122, 128, 3), (3, 43, 67, 1)],  # input_shape
+        [(3, 30, 32, 3), (3, 43, 67, 1)],  # input_shape
         [1, 3],  # output_channels
         [2, 4],  # n_levels
         [8, 16],  # channels
@@ -18,7 +18,7 @@ PARAMS_2D = list(
 
 PARAMS_3D = list(
     product(
-        [(3, 16, 122, 128, 3)],  # input_shape
+        [(3, 16, 30, 32, 3)],  # input_shape
         [1, 3],  # output_channels
         [2, 4],  # n_levels
         [8, 16],  # channels
@@ -33,7 +33,7 @@ def test_bottleneck_block():
 
     b_block = bottleneck_conv_block(channels=32, spatial_dims=2, norm_groups=4)
 
-    input_tensor = tf.random.normal((3, 128, 128, 32))
+    input_tensor = tf.random.normal((3, 8, 8, 32))
     output_tensor = b_block(input_tensor)
 
     assert input_tensor.shape == output_tensor.shape
@@ -50,7 +50,7 @@ def test_double_bottleneck_blocks():
                                       spatial_dims=2,
                                       norm_groups=4)
 
-    input_tensor = tf.random.normal((3, 128, 128, 32))
+    input_tensor = tf.random.normal((3, 8, 8, 32))
 
     output_tensor_A = b_block_A(input_tensor)
     output_tensor_A_prime = b_block_A(input_tensor)
@@ -73,7 +73,7 @@ def test_hourglass_block():
                               spatial_dims=2,
                               spacing=1)
 
-    input_tensor = tf.random.normal((3, 128, 128, 32))
+    input_tensor = tf.random.normal((3, 32, 32, 32))
     output_tensor = b_block(input_tensor)
 
     assert input_tensor.shape == output_tensor.shape
@@ -91,10 +91,10 @@ def test_single_hourglass():
                               spacing=1,
                               norm_groups=4)
 
-    input_tensor = tf.random.normal((3, 128, 128, 1))
+    input_tensor = tf.random.normal((3, 32, 32, 1))
     output_tensor = hglass(input_tensor)
 
-    assert output_tensor.shape == (3, 128, 128, 7)
+    assert output_tensor.shape == (3, 32, 32, 7)
 
 
 def test_delta_loop():
@@ -113,20 +113,20 @@ def test_delta_loop():
                              recurrent_block=hglass,
                              default_n_steps=n_steps)
 
-    input_tensor = tf.random.normal((3, 128, 128, 3))
+    input_tensor = tf.random.normal((3, 32, 32, 3))
 
     # without initial state
     output_tensor, deltas = recur_block(input_tensor)
-    assert output_tensor.shape == (n_steps, 3, 128, 128, 1)
+    assert output_tensor.shape == (n_steps, 3, 32, 32, 1)
 
     # with initial state
-    state = tf.zeros((3, 128, 128, 1), input_tensor.dtype)
+    state = tf.zeros((3, 32, 32, 1), input_tensor.dtype)
     output_tensor, deltas = recur_block(input_tensor, state=state)
-    assert output_tensor.shape == (n_steps, 3, 128, 128, 1)
+    assert output_tensor.shape == (n_steps, 3, 32, 32, 1)
 
     # with extra iterations
     output_tensor, deltas = recur_block(input_tensor, n_steps=n_steps + 1)
-    assert output_tensor.shape == (n_steps + 1, 3, 128, 128, 1)
+    assert output_tensor.shape == (n_steps + 1, 3, 32, 32, 1)
 
 
 hglass_options = [
@@ -239,7 +239,7 @@ def supervision_loss(y_true, y_preds):
 def test_training_GenericRecurrentHourglassBase(tmpdir):
     '''tests recurrent hourglass training and saving'''
 
-    input_tensor = tf.random.normal((4, 122, 128, 1))
+    input_tensor = tf.random.normal((4, 30, 32, 1))
     target = tf.math.greater(input_tensor, 0.)
 
     model = GenericRecurrentHourglassBase((None, None, 1),
@@ -260,7 +260,7 @@ def test_training_GenericRecurrentHourglassBase(tmpdir):
 
     outputs_init, deltas = model(input_tensor)
     loss_init = supervision_loss(target, outputs_init)
-    assert outputs_init.shape == (3, 4, 122, 128, 1)
+    assert outputs_init.shape == (3, 4, 30, 32, 1)
 
     # train model
     model.fit(
@@ -273,7 +273,7 @@ def test_training_GenericRecurrentHourglassBase(tmpdir):
 
     outputs_trained, deltas = model(input_tensor)
     loss_trained = supervision_loss(target, outputs_trained)
-    assert outputs_trained.shape == (3, 4, 122, 128, 1)
+    assert outputs_trained.shape == (3, 4, 30, 32, 1)
 
     # save and reload model
     output_path = tmpdir / 'model.h5'
@@ -290,7 +290,7 @@ def test_training_GenericRecurrentHourglassBase(tmpdir):
 
     outputs_reloaded, deltas = loaded_model(input_tensor)
     loss_reloaded = supervision_loss(target, outputs_reloaded)
-    assert outputs_reloaded.shape == (3, 4, 122, 128, 1)
+    assert outputs_reloaded.shape == (3, 4, 30, 32, 1)
 
     assert not np.allclose(
         outputs_init.numpy(), outputs_trained.numpy(), rtol=1e-5)
