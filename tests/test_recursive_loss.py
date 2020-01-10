@@ -15,14 +15,11 @@ def test_RecursiveLoss(n_steps, n_channels, alpha):
     y_preds = tf.random.normal((n_steps, 4, 122, 128, n_channels))
     y_true = tf.random.normal((4, 122, 128, n_channels))
 
-    # TODO better way that rewrite tensorflow op in python?
-    manual_loss = sum([
-        alpha**(n_steps - (idx + 1)) * loss_fun(y_true, yp)
-        for idx, yp in enumerate(y_preds)
-    ])
-    wg_scaling = sum(
+    weights = np.asarray(
         [alpha**(n_steps - (idx + 1)) for idx in range(len(y_preds))])
-    manual_loss /= wg_scaling
+    weights /= weights.sum()
+    manual_loss = sum(weight * loss_fun(y_true, yp)
+                      for weight, yp in zip(weights, y_preds))
 
     r_loss = RecursiveLoss(loss_fun, alpha)(y_true, y_preds)
     np.testing.assert_almost_equal(manual_loss.numpy(),
