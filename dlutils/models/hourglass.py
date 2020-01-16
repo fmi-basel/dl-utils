@@ -1,421 +1,361 @@
-'''hybrid model of resne(x)t and hourglass.
+'''Loose implementation of hourglass network.
 
-'''
+Newell, Alejandro, Kaiyu Yang, and Jia Deng. "Stacked hourglass
+    networks for human pose estimation." European Conference on
+    Computer Vision. Springer, Cham, 2016.
 
-# TODO:
-# somehow change layer naming for 3D? 3x3 --> 3x3x3
-# add options to downscale input
-# intermediate supervision
+Notes:
+- skip branches are concatenated instead of summed (i.e. like in U-net)'''
 
-from __future__ import absolute_import
-from __future__ import division
-from __future__ import print_function
-from __future__ import unicode_literals
-from builtins import range
+import tensorflow as tf
+import numpy as np
 
-from tensorflow.keras.engine import Input
-from tensorflow.keras.engine import Model
-from tensorflow.keras.engine.topology import get_source_inputs
+from tensorflow.keras import Model
+from tensorflow.keras.layers import Dropout, Input, LeakyReLU
+from tensorflow_addons.layers import GroupNormalization
 
-from tensorflow.keras.layers import BatchNormalization
-from tensorflow.keras.layers import Activation
-from tensorflow.keras.layers import add
-from tensorflow.keras.layers import concatenate
-from tensorflow.keras.layers import Conv2D, Conv3D
-from tensorflow.keras.layers import UpSampling2D, UpSampling3D
-from tensorflow.keras.layers import MaxPooling2D, MaxPooling3D
-from tensorflow.keras.layers import Dropout
+from dlutils.layers.nd_layers import get_nd_conv, get_nd_maxpooling, get_nd_upsampling
+from dlutils.layers.padding import DynamicPaddingLayer, DynamicTrimmingLayer
+from dlutils.models.utils import anisotropic_kernel_size, n_anisotropic_ops
 
-from tensorflow.keras.backend import get_uid
-
-from dlutils.layers.grouped_conv import GroupedConv2D, GroupedConv3D
-from dlutils.layers.padding import DynamicPaddingLayer
-from dlutils.layers.padding import DynamicTrimmingLayer
+Activation = LeakyReLU
 
 
-def get_unique_layer_name(name):
+# NOTE
+# layers declared in the main function and used in the returned inner function are not shared
+# somehow NOT equivalent to fcts = [lambda x: a * x for a  in range(10)]
+# see unit test test_double_bottleneck_blocks()
+def _stack_layers(layers):
     '''
     '''
-    return '{}_{}'.format(name, get_uid(name))
+    def block(x):
+        for layer in layers:
+            x = layer(x)
+        return x
+
+    return block
 
 
-def bottleneck_conv_block(n_features,
-                          activation='relu',
-                          with_bn=True,
-                          dropout=0.,
-                          cardinality=1,
-                          dim_3D=False):
+def bottleneck_conv_block(channels=32, spatial_dims=2, norm_groups=4):
     '''
-
     Notes
     -----
     pre-activation to keep the residual path clear as described in:
-
+    
     HE, Kaiming, et al. Identity mappings in deep residual networks.
     In: European conference on computer vision. Springer, Cham, 2016.
     S. 630-645.
     '''
-    # conv layer definitions.
-    if dim_3D:
-        Conv = Conv3D
-        GroupedConv = GroupedConv3D
-    else:
-        Conv = Conv2D
-        GroupedConv = GroupedConv2D
 
-    conv_kwargs = dict(activation=None, strides=(1), padding='same')
+    Conv = get_nd_conv(spatial_dims)
 
-    assert int(cardinality) - cardinality <= 1e-6
-    cardinality = int(cardinality)
+    conv_in = Conv(channels, kernel_size=1, padding='same')
 
-    def block(input_tensor):
-        '''
-        '''
-        x = input_tensor
-
-        # 1x1 channels//2
-        if with_bn:
-            x = BatchNormalization(name=get_unique_layer_name('bn'))(x)
-        x = Activation(activation, name=get_unique_layer_name(activation))(x)
-        if dropout > 0.:
-            x = Dropout(dropout, name=get_unique_layer_name('do'))(x)
-        x = Conv(
-            n_features // 2,
-            kernel_size=(1),
-            name=get_unique_layer_name('c1x1'),
-            **conv_kwargs)(x)
-
-        # 3x3 channels//2
-        if with_bn:
-            x = BatchNormalization(name=get_unique_layer_name('bn'))(x)
-        x = Activation(activation, name=get_unique_layer_name(activation))(x)
-        if dropout > 0.:
-            x = Dropout(dropout, name=get_unique_layer_name('do'))(x)
-        if cardinality == 1:
-            x = Conv(
-                n_features // 2,
-                kernel_size=(3),
-                name=get_unique_layer_name('c3x3'),
-                **conv_kwargs)(x)
-
-            # ~ # TODO test separable conv
-            # ~ x = Conv(n_features//2, kernel_size=(3,1,1), name=get_unique_layer_name('c3x3'), **conv_kwargs)(x)
-            # ~ x = Conv(n_features//2, kernel_size=(1,3,1), name=get_unique_layer_name('c3x3'), **conv_kwargs)(x)
-            # ~ x = Conv(n_features//2, kernel_size=(1,1,3), name=get_unique_layer_name('c3x3'), **conv_kwargs)(x)
-        else:
-            x = GroupedConv(
-                n_features // 2,
-                kernel_size=(3),
-                cardinality=cardinality,
-                name=get_unique_layer_name('g{:d}c3x3'.format(cardinality)),
-                **conv_kwargs)(x)
-
-        # 1x1 channels
-        if with_bn:
-            x = BatchNormalization(name=get_unique_layer_name('bn'))(x)
-        x = Activation(activation, name=get_unique_layer_name(activation))(x)
-        if dropout > 0.:
-            x = Dropout(dropout, name=get_unique_layer_name('do'))(x)
-        x = Conv(
-            n_features,
-            kernel_size=(1),
-            name=get_unique_layer_name('c1x1'),
-            **conv_kwargs)(x)
-
-        x = add([input_tensor, x], name=get_unique_layer_name('add'))
-        return x
-
-    return block
-
-
-def hourglass_block(n_features, n_levels, n_blocks_per_level, cardinality,
-                    with_bn, anisotropic, dropout, dim_3D=False):
-    '''
-    '''
-
-    block_params = dict(cardinality=cardinality, with_bn=with_bn,
-                        dropout=dropout, dim_3D=dim_3D)
-
-    base_block = bottleneck_conv_block
-
-    if dim_3D:
-        pooling = MaxPooling3D
-        upsampling = UpSampling3D
-        Conv = Conv3D
-    else:
-        pooling = MaxPooling2D
-        upsampling = UpSampling2D
-        Conv = Conv2D
-    if anisotropic:
-        # TODO downsample every x levels to roughly compensate for lower z
-        # sampling
-        size_factor = (1, 2, 2)
-    else:
-        size_factor = (2)
-
-    def block(input_tensor):
-        '''
-        '''
-        links = []
-        x = input_tensor
-
-        # top down
-        for level in range(n_levels):
-            links.append(x)
-            for _ in range(n_blocks_per_level):
-                x = base_block(n_features, **block_params)(x)
-
-            x = pooling(size_factor, name=get_unique_layer_name('down2'))(x)
-
-        # compressed representation
-        for _ in range(n_blocks_per_level * 3):
-            x = base_block(n_features, **block_params)(x)
-
-        # expanding path.
-        for level in reversed(range(n_levels)):
-            for _ in range(n_blocks_per_level):
-                links[level] = base_block(
-                    n_features, **block_params)(links[level])
-
-            x = upsampling(
-                size_factor,
-                name=get_unique_layer_name('up2'))(x)  # anisotropic
-            # ~ x = add([x, links[level]], name=get_unique_layer_name('add'))
-
-            x = concatenate([x, links[level]])
-            x = Activation('relu', name=get_unique_layer_name('relu'))(x)
-            x = Conv(
-                n_features,
-                kernel_size=(1),
-                padding='same',
-                name=get_unique_layer_name('c1x1'))(x)
-
-            for _ in range(n_blocks_per_level):
-                x = base_block(n_features, **block_params)(x)
-        return x
-
-    return block
-
-
-def hourglass_stack(
-        n_stacks,
-        n_features,
-        n_levels,
-        n_blocks_per_level,
-        cardinality,
-        with_bn,
-        anisotropic,
-        dropout,
-        dim_3D=False):
-    '''
-    '''
+    seq = _stack_layers([
+        Activation(),
+        GroupNormalization(groups=norm_groups, axis=-1),
+        Conv(channels // 2, kernel_size=1, padding='same'),
+        Activation(),
+        GroupNormalization(groups=norm_groups, axis=-1),
+        Conv(channels // 2, kernel_size=3, padding='same'),
+        Activation(),
+        GroupNormalization(groups=norm_groups, axis=-1),
+        Conv(channels, kernel_size=1, padding='same'),
+    ])
 
     def block(x):
-        '''
-        '''
+        if x.shape[-1] != channels:
+            # if needed, brings the number of input channels to the same as output channels
+            # not strictly a bottleneck anymore
+            x = Activation()(conv_in(x))
 
-        for _ in range(n_stacks):
-            residual = x
-            x = hourglass_block(
-                dropout=dropout,
-                with_bn=with_bn,
-                anisotropic=anisotropic,
-                n_levels=n_levels,
-                n_features=n_features,
-                cardinality=cardinality,
-                n_blocks_per_level=n_blocks_per_level,
-                dim_3D=dim_3D)(x)
-            x = add([x, residual], name=get_unique_layer_name('add'))
+        return x + seq(x)
+
+    return block
+
+
+def hourglass_block(
+        n_levels=4,
+        channels=32,
+        channels_growth=2,
+        spatial_dims=2,
+        spacing=1,
+        norm_groups=4,
+):
+    Conv = get_nd_conv(spatial_dims)
+    MaxPool = get_nd_maxpooling(spatial_dims)
+    UpSampling = get_nd_upsampling(spatial_dims)
+
+    # must be divisible by 2*norm_groups because of channels//2 in bottleneck block
+    level_channels = [
+        int((channels * channels_growth**l) // (2 * norm_groups) * 2 *
+            norm_groups) for l in range(n_levels)
+    ]
+
+    # define layers ################################################
+    # conv block for down path
+    downs = [
+        bottleneck_conv_block(level_channels[l], spatial_dims, norm_groups)
+        for l in range(n_levels)
+    ]
+
+    # conv blocks for residual/skip paths
+    skips = [
+        bottleneck_conv_block(level_channels[l], spatial_dims, norm_groups)
+        for l in range(n_levels)
+    ]
+
+    # conv block for middle layer
+    mid = bottleneck_conv_block(level_channels[-1], spatial_dims, norm_groups)
+
+    # conv blocks for up path
+    ups = [
+        _stack_layers([
+            Conv(level_channels[l], kernel_size=1,
+                 padding='same'),  # reduce concatenated channels by half
+            LeakyReLU(),
+            bottleneck_conv_block(level_channels[l], spatial_dims, norm_groups)
+        ]) for l in range(n_levels - 1)
+    ]
+
+    pools = [
+        MaxPool(anisotropic_kernel_size(spacing, l, n_levels - 1))
+        for l in range(0, n_levels - 1)
+    ]
+    upsamples = [
+        UpSampling(anisotropic_kernel_size(spacing, l, n_levels - 1))
+        for l in range(0, n_levels - 1)
+    ]
+
+    def block(x):
+
+        # down, keeping a handle on intermediate outputs to build skip connections
+        level_outputs = [downs[0](x)]
+        for down, pool in zip(downs[1:], pools):
+            level_outputs.append(down(pool(level_outputs[-1])))
+
+        # residual/skip
+        for idx, skip in enumerate(skips):
+            level_outputs[idx] = skip(level_outputs[idx])
+
+        # middle
+        x = mid(level_outputs.pop(-1))
+        x = tf.identity(x, name="middle")
+
+        # up
+        for idx, (level_var, up, upsample) in enumerate(
+                zip(level_outputs[::-1], ups[::-1], upsamples[::-1])):
+
+            x = upsample(x)
+            # name the concatenation layers for easy access: level 0: last up layer (back to image resolution)
+            x = tf.concat([x, level_var],
+                          axis=-1,
+                          name='concat_l{}'.format(n_levels - 2 - idx))
+            x = up(x)
 
         return x
 
     return block
 
 
-def input_block(
-        n_features,
-        n_levels,
-        cardinality,
-        with_bn,
-        dropout,
-        dim_3D=False):
+def single_hourglass(output_channels,
+                     n_levels=4,
+                     channels=32,
+                     channels_growth=2,
+                     spatial_dims=2,
+                     spacing=1,
+                     norm_groups=4):
+    '''Combines an hourglass block with input/output blocks to 
+    increase/decrease the number of channels.
+    
+    Notes:
+    Expects the input to be already padded)
     '''
-    TODO add option to use downscaling as in paper
-    or
-    keep original size and increase number of channel with conv
+
+    Conv = get_nd_conv(spatial_dims)
+
+    hglass = _stack_layers([
+        Conv(channels, kernel_size=1, padding='same'),
+        bottleneck_conv_block(channels, spatial_dims, norm_groups),
+        hourglass_block(n_levels, channels, channels_growth, spatial_dims,
+                        spacing, norm_groups),
+        bottleneck_conv_block(channels, spatial_dims, norm_groups),
+        Activation(),
+        GroupNormalization(groups=norm_groups, axis=-1),
+        Conv(channels, kernel_size=3, padding='same'),
+        Activation(),
+        GroupNormalization(groups=norm_groups, axis=-1),
+        Conv(output_channels, kernel_size=1, padding='same'),
+    ])
+
+    return hglass
+
+
+def delta_loop(output_channels, recurrent_block, default_n_steps=3):
+    '''Recursively applies a given block to refine its output.
+    
+    Args:
+        output_channels: number of output channels.
+        recurrent_block: a network taking (input_channels + output_channels) as 
+        input and outputting output_channels
+        n_steps: number of times the block is applied
     '''
+    def block(x, state=None, n_steps=None):
 
-    block_params = dict(cardinality=cardinality, with_bn=with_bn,
-                        dropout=dropout, dim_3D=dim_3D)
-    if dim_3D:
-        ndim = 5
-        Conv = Conv3D
-        pooling = MaxPooling3D
-    else:
-        ndim = 4
-        Conv = Conv2D
-        pooling = MaxPooling2D
+        if state is None:
+            # NOTE: does not serialize model properly, channel size lost when reloading
+            # ~recurrent_shape = tf.concat([tf.shape(x)[:-1], tf.constant([output_channels])], axis=0)
+            # ~state = tf.zeros(recurrent_shape, x.dtype)
 
-    def block(input_tensor):
-        '''
-        '''
-        x = input_tensor
+            # TODO figure out how to get theshape to serialize properly
+            state = tf.zeros_like(x[..., 0])[..., None]
+            state = tf.keras.backend.repeat_elements(state,
+                                                     output_channels,
+                                                     axis=-1)
 
-        # ~ x = DynamicPaddingLayer(factor=2**(2+n_levels), ndim=ndim, name='dpad')(x)
-        # ~ x = Conv(
-        # ~ n_features,
-        # ~ kernel_size=(7),
-        # ~ strides=(2),
-        # ~ name=get_unique_layer_name('c7x7'),
-        # ~ padding='same')(x)
-        # ~ x = Activation('relu', name=get_unique_layer_name('relu'))(x)
-        # ~ x = bottleneck_conv_block(n_features, **block_params)(x)
-        # ~ x = pooling(2, name=get_unique_layer_name('down2'))(x)
+        if n_steps is None:
+            n_steps = default_n_steps
+        # static unrolling #############################################
 
-        # alternatively don't downscale, simply change the number of channels
-        # to n_features
-        x = DynamicPaddingLayer(factor=2**n_levels, ndim=ndim, name='dpad')(x)
-        x = Conv(
-            n_features,
-            kernel_size=(7),
-            name=get_unique_layer_name('c7x7'),
-            padding='same')(x)
+        # ~outputs = []
+        # ~for _ in range(n_steps): # static unrolled loop
 
-        x = bottleneck_conv_block(n_features, **block_params)(x)
-        x = bottleneck_conv_block(n_features, **block_params)(x)
+        # ~delta = recurrent_block(tf.concat([x, state], axis=-1))
+        # ~state = state + delta
+        # ~outputs.append(state)
 
-        return x
+        # ~return tf.stack(outputs, axis=0)
+
+        # dynamic alternative ##########################################
+        i = tf.constant(0)
+        outputs = tf.TensorArray(tf.float32, size=n_steps)
+        deltas = tf.TensorArray(tf.float32, size=n_steps)
+
+        def cond(i, outputs, deltas, state):
+            return tf.less(i, n_steps)
+
+        def body(i, outputs, deltas, state):
+            delta = recurrent_block(tf.concat([x, state], axis=-1))
+            state = state + delta
+
+            deltas = deltas.write(i, delta)
+            outputs = outputs.write(i, state)
+
+            i = tf.add(i, 1)
+            return (i, outputs, deltas, state)
+
+        i, outputs, deltas, state = tf.while_loop(cond,
+                                                  body,
+                                                  [i, outputs, deltas, state],
+                                                  swap_memory=True)
+
+        return outputs.stack(), deltas.stack()
+
     return block
 
 
-def get_model_name(width, cardinality, n_stacks, n_levels, n_blocks,
-                   dropout, with_bn, dim_3D, anisotropic,
+def get_model_name(n_levels,
+                   channels,
+                   channels_growth,
+                   output_channels,
+                   spatial_dims,
+                   spacing=1,
                    **kwargs):
     '''
     '''
-    name = 'hourglass-W{}-C{}-S{}-L{}-B{}'.format(
-        width, cardinality, n_stacks, n_levels, n_blocks)
-    if with_bn:
-        name += '-BN'
-    if dropout is not None:
-        name += '-D{}'.format(dropout)
-    if dim_3D:
-        name += '-3D'
-    if anisotropic:
-        name += '-A'
+    spacing = np.broadcast_to(np.array(spacing), spatial_dims)
+
+    name = 'hourglass-L{}-C{}-G{}-O{}-D{}'.format(n_levels, channels,
+                                                  channels_growth,
+                                                  output_channels,
+                                                  spatial_dims)
+    if spatial_dims == 3:
+        name += '-S{:.2g}_{:.2g}_{:.2g}'.format(*spacing)
     return name
 
 
-def GenericHourglassBase(input_shape=None,
-                         input_tensor=None,
-                         batch_size=None,
-                         dropout=None,
-                         with_bn=False,
-                         anisotropic=False,
-                         width=1,
-                         cardinality=1,
-                         n_stacks=1,
-                         n_levels=5,
-                         n_blocks=1):
+def GenericRecurrentHourglassBase(input_shape,
+                                  output_channels,
+                                  external_init_state=False,
+                                  default_n_steps=3,
+                                  n_levels=4,
+                                  channels=32,
+                                  channels_growth=2,
+                                  spatial_dims=2,
+                                  spacing=1,
+                                  norm_groups=4):
+    '''Constructs a hourglass/U-net like network
+    
+    Args:
+        input_shape: at least the number of channels should be defined
+        output_channels: number of output channels in the last layer
+        external_init_state: if True, the network will take a second input 
+            to initialize the recurrent state (default tf.zeros)
+        default_n_steps: number of times the network is recurrently applied
+        n_levels: ~ depth of the network, also corresponds to the number
+            of pooling layers
+        channels: number of channels of the first layer
+        channels_growth: channel multiplication factor for subsequent layers.
+            1 - fixed number of channels as in hourglass, 
+            2 - double each layer as in U-net
+            Note that the exact number of channels will be floored to be 
+            divisible by 2*norm_groups
+        spatial_dims: number of spatial dimensions, 2 or 3
+        spacing: pixel/voxel's size
+        norm_groups: number of normalization groups of groupnorm layers
+        
+    Notes:
+    - Anisotropic pooling
+    if anisotropic spacing is provided, the pooling size will be 2 along
+    the dimension with the smallest spacing and 1 or 2 along the other 
+    dimension(s) depending on the layer, so as to approximate an isotropic 
+    field of view.
+    
+    For examples for a doubled z spacing: (0.5,0.25,0.25) the pooling size
+    will be (1,2,2) for the first layer and (2,2,2) for the remaining ones
+    
+    - Saving and reloading the model
+    Saved weights should be loaded in a newly instantiated model. it allows
+    changing the number of iterations as well as adding/removing input for 
+    initial state without retraining a model.
+    This is also a workaround the current issue with reloading yaml files with
+    nested structures.
     '''
-    From paper:
 
-    Newell, Alejandro, Kaiyu Yang, and Jia Deng. "Stacked hourglass
-    networks for human pose estimation." European Conference on
-    Computer Vision. Springer, Cham, 2016.
+    n_not_pooling = n_anisotropic_ops(spacing, base=2)
+    factor = 2**np.maximum(0, ((n_levels - 1) - n_not_pooling))
+    input_padding = DynamicPaddingLayer(factor=factor, ndim=spatial_dims + 2)
 
-    except additions are replaced by concatenations followed by 1x1 conv
-    to reduce the number of channels by half
-    '''
-    n_features = int(width * 32)
-    if len(input_shape) == 4:
-        dim_3D = True
-        ndim = 5
+    hglass = single_hourglass(output_channels, n_levels, channels,
+                              channels_growth, spatial_dims, spacing,
+                              norm_groups)
+    r_hglass = delta_loop(output_channels, hglass, default_n_steps)
+    output_trimming = DynamicTrimmingLayer(ndim=spatial_dims + 2)
+
+    def trim_stack(x, stack):
+        '''Trims a stack of intermediates outputs one by one'''
+        tensors = [output_trimming([x, sl]) for sl in stack]
+        return tf.stack(tensors)
+
+    # TODO is it possible to change n_steps and initial state at run time? (i.e. have optional inputs/attributes)
+    x = Input(shape=input_shape)
+    y = input_padding(x)
+
+    if external_init_state is False:
+        inputs = [x]
+        y, deltas = r_hglass(y)
+
     else:
-        dim_3D = False
-        ndim = 4
+        state = Input(shape=input_shape[:-1] + (output_channels, ))
+        inputs = [x, state]
 
-    if cardinality < 1 or n_features % cardinality != 0:
-        raise ValueError(
-            'cardinality must be integer and a divisor of n_features.'
-            ' ({} / {} != 0'.format(n_features, cardinality))
-    if anisotropic and not dim_3D:
-        raise ValueError('anisotropic option only available for 3D inputs')
+        padded_state = input_padding(state)
+        y, deltas = r_hglass(y, padded_state)
 
-    # Assemble input
-    # NOTE we use flexible sized inputs per default.
-    if input_tensor is None:
-        img_input = Input(
-            # ~ batch_shape=(batch_size, ) + (None, None, input_shape[-1]),
-            batch_shape=(batch_size, ) +
-            tuple(None for _ in range(len(input_shape) - 1)) +
-            (input_shape[-1],),
-            name='input')
-    else:
-        img_input = input_tensor
+    y = trim_stack(x, y)
+    deltas = trim_stack(x, deltas)
 
-    x = input_block(
-        n_features=n_features,
-        n_levels=n_levels,
-        cardinality=cardinality,
-        with_bn=with_bn,
-        dropout=dropout,
-        dim_3D=dim_3D)(img_input)
-
-    # TODO implement intermediate module and recover outputs after each
-    # hourglass for intermediate supervision
-    x = hourglass_stack(
-        dropout=dropout,
-        with_bn=with_bn,
-        anisotropic=anisotropic,
-        n_stacks=n_stacks,
-        n_levels=n_levels,
-        n_features=n_features,
-        cardinality=cardinality,
-        n_blocks_per_level=n_blocks,
-        dim_3D=dim_3D)(x)
-    x = DynamicTrimmingLayer(ndim=ndim, name='dtrim')([img_input, x])
-
-    # TODO create separate output_block(), with option for upscaling
-    if dim_3D:
-        Conv = Conv3D
-        upsampling = UpSampling3D
-    else:
-        Conv = Conv2D
-        upsampling = UpSampling2D
-
-    # upscale output to match labels size (else could implement downscale label)
-    # TODO linear/cubic interp
-    # ~ x = upsampling(4, name=get_unique_layer_name('up4'))(x)
-    x = Activation('relu', name=get_unique_layer_name('relu'))(x)
-    x = Conv(
-        n_features,
-        kernel_size=(3),
-        name=get_unique_layer_name('c3x3'),
-        padding='same')(x)
-    x = Activation('relu', name=get_unique_layer_name('relu'))(x)
-    x = Conv(
-        n_features,
-        kernel_size=(3),
-        name=get_unique_layer_name('c3x3'),
-        padding='same')(x)
-    x = Activation('relu', name=get_unique_layer_name('relu'))(x)
-
-    if input_tensor is not None:
-        inputs = get_source_inputs(input_tensor)
-    else:
-        inputs = img_input
-
-    return Model(
-        inputs=inputs,
-        outputs=x,
-        name=get_model_name(
-            width=width,
-            cardinality=cardinality,
-            n_stacks=n_stacks,
-            n_levels=n_levels,
-            n_blocks=n_blocks,
-            dropout=dropout,
-            with_bn=with_bn,
-            dim_3D=dim_3D,
-            anisotropic=anisotropic))
+    return Model(inputs=inputs,
+                 outputs=[y, deltas],
+                 name=get_model_name(n_levels, channels, channels_growth,
+                                     output_channels, spatial_dims, spacing))
