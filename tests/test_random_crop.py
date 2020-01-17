@@ -102,13 +102,15 @@ def test_random_crop_on_list(patch_size, n_inputs):
             assert not np.all(vals.numpy() == first_patch[ii].numpy())
 
 
+@pytest.mark.xfail
+# yapf: disable
 @pytest.mark.parametrize(
     'shapes',
-    [[(13, 15, 1),
-      (13, 15, 2)], [(4, 5, 6, 7),
-                     (4, 5, 8, 7)], [(13, 15, 1),
-                                     (13, 15)], [(13, 4, 1), (13, 4, 1),
-                                                 (13, 4, 1), (11, 4, 1)]])
+    [[(13, 15, 1), (13, 15, 2)],
+     [(4, 5, 6, 7),  (4, 5, 8, 7)],
+     [(13, 15, 1), (13, 15)],
+     [(13, 4, 1), (13, 4, 1), (13, 4, 1), (11, 4, 1)]])
+# yapf: enable
 def test_random_crop_mismatching_shapes(shapes):
     '''test if shape mismatches in the input raise.
 
@@ -119,3 +121,24 @@ def test_random_crop_mismatching_shapes(shapes):
     cropper = random_crop(patch_size)
     with pytest.raises(ValueError):
         cropper(inputs)
+
+
+# yapf: disable
+@pytest.mark.parametrize(
+    'shapes',
+    [[(13, 15, 1), (13, 15, 2)],
+     [(15, 14, 1), (15, 14, 4), (15, 14, 3)]])
+# yapf: enable
+def test_random_crop_flexible(shapes):
+    '''test if shape mismatches in the input raise.
+
+    '''
+    patch_size = (13, 13, -1)
+    inputs = [np.ones(shape) for shape in shapes]
+
+    cropper = random_crop(patch_size)
+    patches = cropper(inputs)
+
+    for ii, patch in enumerate(patches):
+        assert np.all(patch.shape[:-1] == patch_size[:-1])
+        assert patch.shape[-1] == inputs[ii].shape[-1]
