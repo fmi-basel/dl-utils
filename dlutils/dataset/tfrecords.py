@@ -1,8 +1,8 @@
 '''utility functions to write and read tfrecord datasets.
 
 '''
+import abc
 import os
-from glob import glob
 
 from tqdm import tqdm
 import tensorflow as tf
@@ -33,20 +33,12 @@ def tfrecord_from_iterable(output_path, iterable, serialize_fn, verbose=False):
             writer.write(serialize_fn(*sample).SerializeToString())
 
 
-def tfrecord_from_sample(output_path, sample, serialize_fn):
+def tfrecord_from_sample(output_path, sample, serialize_fn, *args, **kwargs):
     '''prepare a tensorflow record for a single sample.
 
     '''
-    return tfrecord_from_iterable(output_path, [sample], serialize_fn)
-
-
-def count_samples_in_records(filename_pattern):
-    '''count the number of samples stored in a set of tfrecord files.
-
-    '''
-    # TODO replace with eager mode.
-    return sum(1 for fname in glob(filename_pattern)
-               for _ in tf.python_io.tf_record_iterator(fname))
+    return tfrecord_from_iterable(output_path, [sample], serialize_fn, *args,
+                                  **kwargs)
 
 
 # From https://www.tensorflow.org/tutorials/load_data/tf_records
@@ -71,14 +63,38 @@ def _int64_feature(value):
     return tf.train.Feature(int64_list=tf.train.Int64List(value=value))
 
 
-# TODO Rewrite for base case.
-class ImageToClassRecordParser:
+class RecordParserBase(abc.ABC):
+    '''Base class for RecordParsers.
+
+    This serves the purpose of
+    - Defining the RecordParser skeleton
+    - Facilitating future extension of parsers.
+
+    '''
+
+    @abc.abstractmethod
+    def serialize(self, *args):
+        '''convert a training sample into a serializeable tf.Example.
+
+        '''
+        pass
+
+    @abc.abstractmethod
+    def parse(self, example):
+        '''convert the serialized string tensor into the training sample.
+
+        '''
+        pass
+
+
+class ImageToClassRecordParser(RecordParserBase):
     '''defines the serialize and parse function for a typical image
     classification dataset.
 
     '''
     label_key = 'label'
     image_key = 'image'
+    shape_key = 'shape'
 
     def __init__(self, n_classes, image_dtype, fixed_ndim=None):
         '''
@@ -94,7 +110,7 @@ class ImageToClassRecordParser:
         '''
         features = tf.train.Features(
             feature={
-                'img_shape': _int64_feature(list(image.shape)),
+                self.shape_key: _int64_feature(list(image.shape)),
                 self.image_key: _bytes_feature(image.tostring()),
                 self.label_key: _int64_feature(label)
             })
@@ -106,22 +122,101 @@ class ImageToClassRecordParser:
         '''
         features = {
             # Extract features using the keys set during creation
-            'img_shape': tf.io.FixedLenSequenceFeature([], tf.int64, True),
-            'label': tf.io.FixedLenFeature([], tf.int64),
-            'image': tf.io.FixedLenFeature([], tf.string),
+            self.shape_key:
+            tf.io.FixedLenSequenceFeature([], tf.int64, True),
+            self.label_key:
+            tf.io.FixedLenFeature([], tf.int64),
+            self.image_key:
+            tf.io.FixedLenFeature([], tf.string),
         }
         sample = tf.io.parse_single_example(example, features)
 
         # Fixed shape appears to be necessary for training with keras.
         if self.fixed_ndim is not None:
-            shape = tf.reshape(sample['img_shape'], (self.fixed_ndim, ))
+            shape = tf.reshape(sample[self.shape_key], (self.fixed_ndim, ))
         else:
-            shape = sample['img_shape']
+            shape = sample[self.shape_key]
 
-        image = tf.io.decode_raw(sample['image'], self.image_dtype)
+        image = tf.io.decode_raw(sample[self.image_key], self.image_dtype)
         image = tf.reshape(image, shape)
         image = tf.cast(image, tf.float32)
         return {
-            self.label_key: tf.one_hot(sample['label'], self.n_classes),
+            self.label_key: tf.one_hot(sample[self.label_key], self.n_classes),
             self.image_key: image
         }
+
+
+class ImageToSegmentationRecordParser(RecordParserBase):
+    '''defines the serialize and parse function for a typical image
+    segmentation dataset.
+
+    '''
+
+    segm_key = 'segm'
+    image_key = 'image'
+    shape_key = 'shape'
+
+    def __init__(self, image_dtype, segm_dtype, fixed_ndim=None):
+        '''
+        '''
+        self.image_dtype = image_dtype
+        self.segm_dtype = segm_dtype
+        self.fixed_ndim = fixed_ndim
+        assert fixed_ndim is None or fixed_ndim >= 2
+
+    def serialize(self, image, mask):
+        '''
+        '''
+        targets = {self.segm_key: mask}
+
+        for key, target in targets.items():
+            if not all(x == y for x, y in zip(image.shape, target.shape)):
+                raise ValueError(
+                    'Image and {} do not have the same shape: {} vs {}'.format(
+                        key, image.shape, target.shape))
+
+        features = tf.train.Features(
+            feature={
+                self.shape_key: _int64_feature(list(image.shape)),
+                self.image_key: _bytes_feature(image.tostring()),
+                **{
+                    key: _bytes_feature(target.tostring())
+                    for key, target in targets.items()
+                }
+            })
+        return tf.train.Example(features=features)
+
+    def parse(self, example):
+        '''parse a tfrecord example.
+
+        '''
+        features = {
+            # Extract features using the keys set during creation
+            self.shape_key:
+            tf.io.FixedLenSequenceFeature([], tf.int64, True),
+            self.image_key:
+            tf.io.FixedLenFeature([], tf.string),
+            self.segm_key:
+            tf.io.FixedLenFeature([], tf.string),
+        }
+        sample = tf.io.parse_single_example(example, features)
+
+        # Fixed shape appears to be necessary for training with keras.
+        if self.fixed_ndim is not None:
+            shape = tf.reshape(sample[self.shape_key], (self.fixed_ndim, ))
+        else:
+            shape = sample[self.shape_key]
+
+        def _reshape_and_cast(val, dtype):
+            '''this ensures that tensorflow "knows" the shape of the resulting
+            tensors.
+            '''
+            return tf.cast(
+                tf.reshape(tf.io.decode_raw(val, dtype), shape), tf.float32)
+
+        parsed = {
+            key: _reshape_and_cast(sample[key], dtype)
+            for key, dtype in zip([self.image_key, self.segm_key],
+                                  [self.image_dtype, self.segm_dtype])
+        }
+        return parsed
