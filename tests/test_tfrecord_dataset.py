@@ -12,6 +12,8 @@ from dlutils.dataset.tfrecords import ImageToSegmentationRecordParser
 from dlutils.dataset.dataset import create_dataset
 from dlutils.dataset.dataset import create_linear_dataset
 
+from dlutils.dataset.augmentations import random_axis_flip
+
 
 @pytest.fixture(autouse=True)
 def clean_session():
@@ -325,7 +327,10 @@ def test_training_from_dataset(tmpdir):
         patch_size=patch_size,
         shuffle_buffer=5,
         drop_remainder=drop_remainder,
-        transforms=[_dict_to_tuple],
+        transforms=[
+            random_axis_flip(axis=1, flip_prob=0.5),
+            random_axis_flip(axis=0, flip_prob=0.5), _dict_to_tuple
+        ],
         cache_after_parse=False)
 
     # create model
@@ -336,7 +341,10 @@ def test_training_from_dataset(tmpdir):
 
     # train.
     model.compile(loss='mse')
+    loss_before = model.evaluate(dataset)
     model.fit(dataset, epochs=5)
+    loss_after = model.evaluate(dataset)
+    assert loss_before * 0.95 >= loss_after
 
 
 def test_training_with_multioutput(tmpdir):
