@@ -7,6 +7,11 @@ import tensorflow as tf
 from dlutils.dataset.cropping import random_crop
 
 
+CROP_TEST_PARAMS = list(
+    itertools.product([(5, 10, 11, 2), (20, 10, 3), (5, 10)],  # patch_size
+                      [2, 5]))  # n_inputs
+
+
 def pairwise(iterable):
     '''s -> (s0,s1), (s1,s2), (s2, s3), ...
 
@@ -15,10 +20,6 @@ def pairwise(iterable):
     a, b = itertools.tee(iterable)
     next(b, None)
     return zip(a, b)
-
-
-CROP_TEST_PARAMS = list(
-    itertools.product([(5, 10, 11, 2), (20, 10, 3), (5, 10)], [2, 5]))
 
 
 @pytest.mark.parametrize('patch_size, n_inputs', CROP_TEST_PARAMS)
@@ -113,6 +114,9 @@ def test_random_crop_on_list(patch_size, n_inputs):
 # yapf: enable
 def test_random_crop_mismatching_shapes(shapes):
     '''test if shape mismatches in the input raise.
+
+    This currently fails because the dynamic check for shapes
+    makes random_crop unusable within tf.data pipelines.
 
     '''
     patch_size = (13, 13, 1)
