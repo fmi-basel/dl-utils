@@ -30,7 +30,9 @@ def random_crop(patch_size):
 
             input_shape = tf.shape(iterable[0])
 
-            # NOTE shape checks fail with @tf.function.
+            # NOTE dynamic shape checks prevent this from being used
+            # in tf.data.Dataset, so we'll leave this for now.
+            #
             # for val in iterable[1:]:
             #     other_shape = tf.shape(val)
             #     # yapf: disable
@@ -57,7 +59,6 @@ def random_crop(patch_size):
                     key: tf.slice(value, offset, size)
                     for key, value in inputs.items()
                 }
-            elif isinstance(inputs, (tuple, list)):
-                return tuple(tf.slice(value, offset, size) for value in iterable)
+            return tuple(tf.slice(value, offset, size) for value in iterable)
 
     return _cropper
