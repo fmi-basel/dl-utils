@@ -13,8 +13,17 @@ from dlutils.dataset.dataset import create_dataset
 from dlutils.dataset.dataset import create_linear_dataset
 
 
+@pytest.fixture(autouse=True)
+def clean_session():
+    '''
+    '''
+    yield  # run the test here. Afterwards, clean up...
+    tf.keras.backend.clear_session()
+
+
 class Setup(abc.ABC):
-    '''base for setting up tfrecord datasets for testing.
+    '''base for setting up tfrecord datasets for testing the
+    tf.data pipeline.
 
     '''
 
@@ -70,11 +79,14 @@ class ClassificationDatasetSetup(Setup):
     '''create an image-to-class dataset.
 
     '''
-    parser = ImageToClassRecordParser(image_dtype=tf.uint8, n_classes=10)
+    parser = ImageToClassRecordParser(
+        image_dtype=tf.uint8, n_classes=10, fixed_ndim=3)
     img_shape = (28, 28, 1)
 
     def _generator(self):
-        '''
+        '''generates images of random noise and labels as
+        function of the sample count.
+
         '''
         counter = 0
         while True:
@@ -98,7 +110,8 @@ class SegmentationDatasetSetup(Setup):
     n_classes = 3
 
     def _generator(self):
-        '''
+        '''generates images of random noise and label maps as
+        function of the sample count.
         '''
         counter = 0
         while True:
@@ -162,7 +175,7 @@ def test_create_dataset_clf(tmpdir, n_files, n_samples_per_file, batch_size,
 
 
 @pytest.mark.parametrize(
-    'n_files, n_samples_per_file, batch_size, shuffle, drop_remainder, cache_after_parse, ',
+    'n_files, n_samples_per_file, batch_size, shuffle, drop_remainder, cache_after_parse,',
     itertools.product([1, 3], [5], [1, 3], [False, True], [False, True],
                       [False, True]))
 def test_create_dataset_segm(tmpdir, n_files, n_samples_per_file, batch_size,
@@ -286,3 +299,163 @@ def test_linear_dataset(tmpdir, batch_size):
 
     # check correct number of samples
     assert counter == setup.expected_samples
+
+
+def test_training_from_dataset(tmpdir):
+    '''
+    '''
+    batch_size = 2
+    patch_size = (4, 4, 1)
+    drop_remainder = True
+
+    setup = SegmentationDatasetSetup(2, 14, tmpdir)
+
+    def _dict_to_tuple(sample):
+        '''In TF 2.0, keras' model.fit() doesnt accept tf.data.Datasets
+        with dictionaries, so we have to convert it into a tuple.
+
+        '''
+        return sample['image'], sample['segm']
+
+    # load dataset.
+    dataset = create_dataset(
+        setup.fname_pattern,
+        batch_size,
+        setup.parser.parse,
+        patch_size=patch_size,
+        shuffle_buffer=5,
+        drop_remainder=drop_remainder,
+        transforms=[_dict_to_tuple],
+        cache_after_parse=False)
+
+    # create model
+    model = tf.keras.models.Sequential([
+        tf.keras.layers.Conv2D(4, kernel_size=3, padding='same'),
+        tf.keras.layers.Conv2D(1, kernel_size=3, padding='same'),
+    ])
+
+    # train.
+    model.compile(loss='mse')
+    model.fit(dataset, epochs=5)
+
+
+def test_training_with_multioutput(tmpdir):
+    '''train a dummy network with multiple outputs using the tf.data.Dataset.
+    The tf.data pipeline yields tuples for inputs/targets.
+
+    '''
+    batch_size = 2
+    drop_remainder = True
+
+    tf.random.set_seed(13)
+
+    setup = ClassificationDatasetSetup(2, 14, tmpdir)
+
+    def _dict_to_multi_tuple(sample):
+        '''In TF 2.0, keras' model.fit() doesnt accept tf.data.Datasets
+        with dictionaries, so we have to convert it into a tuple.
+
+        This also creates a fake multitarget output.
+
+        '''
+        return sample['image'], (
+            sample['label'], 2 * tf.reduce_mean(sample['image']) * tf.ones(3))
+
+    # load dataset.
+    dataset = create_dataset(
+        setup.fname_pattern,
+        batch_size,
+        setup.parser.parse,
+        patch_size=None,
+        shuffle_buffer=5,
+        drop_remainder=drop_remainder,
+        transforms=[_dict_to_multi_tuple],
+        cache_after_parse=False)
+
+    # create model and train
+    def _construct_model():
+        '''create model with two outputs.
+
+        '''
+
+        first_input = tf.keras.layers.Input(shape=(16, 16, 1))
+        x = tf.keras.layers.Conv2D(
+            4, kernel_size=3, padding='same')(first_input)
+        x = tf.keras.layers.GlobalAveragePooling2D()(x)
+        first_output = tf.keras.layers.Dense(1, name='first')(x)
+        second_output = tf.keras.layers.Dense(3, name='second')(x)
+
+        return tf.keras.Model(
+            inputs=[first_input], outputs=[first_output, second_output])
+
+    model = _construct_model()
+    model.compile(loss={'first': 'mse', 'second': 'mae'})
+
+    loss_before = model.evaluate(dataset)[0]
+    model.fit(dataset, epochs=5)
+    loss_after = model.evaluate(dataset)[0]
+
+    assert loss_before * 0.95 >= loss_after
+
+
+def test_training_with_multioutput_dict(tmpdir):
+    '''train a dummy network with multiple outputs using the tf.data.Dataset.
+
+    '''
+    batch_size = 2
+    drop_remainder = True
+
+    tf.random.set_seed(13)
+
+    setup = ClassificationDatasetSetup(2, 14, tmpdir)
+
+    def _dict_to_tuple(sample):
+        '''In TF 2.0, keras' model.fit() doesnt accept tf.data.Datasets
+        with dictionaries, so we have to convert it into a tuple.
+
+        This also creates a fake multitarget output.
+
+        '''
+        return {
+            'image': sample['image']
+        }, {
+            'first': sample['label'],
+            'second': 2 * tf.reduce_mean(sample['image']) * tf.ones(3)
+        }
+
+    # load dataset.
+    dataset = create_dataset(
+        setup.fname_pattern,
+        batch_size,
+        setup.parser.parse,
+        patch_size=None,
+        shuffle_buffer=5,
+        drop_remainder=drop_remainder,
+        transforms=[_dict_to_tuple],
+        cache_after_parse=False)
+
+    # create model and train
+    def _construct_model():
+        '''create model with two outputs.
+
+        '''
+
+        first_input = tf.keras.layers.Input(shape=(16, 16, 1), name='image')
+        x = tf.keras.layers.Conv2D(
+            4, kernel_size=3, padding='same')(first_input)
+        x = tf.keras.layers.GlobalAveragePooling2D()(x)
+
+        first_output = tf.keras.layers.Dense(1, name='first')(x)
+        second_output = tf.keras.layers.Dense(3, name='second')(x)
+
+        return tf.keras.Model(
+            inputs=[first_input], outputs=[first_output, second_output])
+
+    model = _construct_model()
+    model.compile(loss={'first': 'mse', 'second': 'mae'})
+
+    loss_before = model.evaluate(dataset)[0]
+    model.fit(dataset, epochs=5)
+    loss_after = model.evaluate(dataset)[0]
+
+    assert loss_before * 0.95 >= loss_after
