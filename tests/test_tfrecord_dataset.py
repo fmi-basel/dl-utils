@@ -83,7 +83,7 @@ class ClassificationDatasetSetup(Setup):
     '''
     parser = ImageToClassRecordParser(
         image_dtype=tf.uint8, n_classes=10, fixed_ndim=3)
-    img_shape = (28, 28, 1)
+    img_shape = (16, 16, 1)
 
     def _generator(self):
         '''generates images of random noise and labels as
@@ -386,7 +386,7 @@ def test_training_with_multioutput(tmpdir):
 
         '''
 
-        first_input = tf.keras.layers.Input(shape=(16, 16, 1))
+        first_input = tf.keras.layers.Input(shape=(None, None, 1))
         x = tf.keras.layers.Conv2D(
             4, kernel_size=3, padding='same')(first_input)
         x = tf.keras.layers.GlobalAveragePooling2D()(x)
@@ -448,7 +448,8 @@ def test_training_with_multioutput_dict(tmpdir):
 
         '''
 
-        first_input = tf.keras.layers.Input(shape=(16, 16, 1), name='image')
+        first_input = tf.keras.layers.Input(
+            shape=(None, None, 1), name='image')
         x = tf.keras.layers.Conv2D(
             4, kernel_size=3, padding='same')(first_input)
         x = tf.keras.layers.GlobalAveragePooling2D()(x)
