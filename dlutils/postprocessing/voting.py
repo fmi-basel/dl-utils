@@ -262,6 +262,7 @@ def vfield_to_labels(vfield,
         fg_mask = fg_from_votes(abs_disp,
                                 votes,
                                 count_threshold=fgbg_threshold)
+        votes = accumulate_votes(abs_disp, fg_mask).astype(np.float32)
 
     seeds, seeds_intensities = local_max(votes,
                                          min_distance=peak_min_distance,
