@@ -249,6 +249,247 @@ def reshape_pseudo_dim(t, n_channels):
     return tf.reshape(t, new_shape)
 
 
+#######################################################################
+def label_mean_hinged_std(y_true, y_pred, margin):
+    '''computes per label mean and pixel-wise distance hinged std (TODO check is stricly std). shape will depend on max label accross the mini-batch'''
+
+    y_true = tf.dtypes.cast(y_true, tf.int32) - 1  # ignore background
+    spatial_axis = tuple(i for i in range(len(y_true.shape) - 1))
+    n_classes = K.maximum(0, K.max(y_true))
+
+    hot = tf.one_hot(y_true[..., 0], n_classes)
+    # remove labels that don't exist
+    nonzero_mask = tf.greater(tf.math.count_nonzero(hot, axis=spatial_axis), 0)
+    hot = tf.boolean_mask(hot, nonzero_mask, axis=len(y_true.shape) - 1)
+
+    counts = K.sum(hot, axis=spatial_axis)
+
+    y_pred = y_pred[..., None, :]
+    means = K.sum((hot[..., None] * y_pred),
+                  axis=spatial_axis) / (counts[..., None] + 1e-12)
+
+    center_dist = tf.norm(means[None, None] - y_pred, axis=-1)
+    center_dist = K.maximum(center_dist - margin, 0)  # apply hinge
+    center_dist_means = K.sum(
+        (hot * center_dist), axis=spatial_axis) / (counts + 1e-12)
+
+    return means, center_dist_means
+
+
+def pairwise_dist(A):
+    ''''''
+
+    expanded_a = tf.expand_dims(A, 1)
+    expanded_b = tf.expand_dims(A, 0)
+    distances = tf.reduce_sum(
+        tf.math.squared_difference(expanded_a, expanded_b), 2)
+
+    return tf.sqrt(distances + 1e-12)
+
+
+def upper_triangle(A):
+    '''returns upper triangle (excluding diagonal) of a 2d matrix'''
+
+    ones = tf.ones_like(A)
+    mask_a = tf.linalg.band_part(ones, 0,
+                                 -1)  # Upper triangular matrix of 0s and 1s
+    mask_b = tf.linalg.band_part(ones, 0, 0)  # Diagonal matrix of 0s and 1s
+    mask = tf.cast(mask_a - mask_b, dtype=tf.bool)  # Make a bool mask
+    mask.set_shape([None, None])
+
+    return tf.boolean_mask(A, mask)
+
+
+def voting_loss2(
+        intra_margin,
+        inter_margin,
+        alpha=1.,
+        beta=1.,
+        spacing=1.,
+):
+
+    # TODO broadcast spacing to correct spatial dim
+    # i.e. make sure it cannot be broadcasted to batch size or unexpected behaviour
+
+    def get_px_coords(vfield):
+        '''Returns the coordinates of each pixel. Ignores first dim (batch), and last dim (ch)'''
+
+        # TODO how to write a general solution for non-eager execution?
+        # ranges = [tf.range(s, dtype=tf.float32) for s in tf.shape(vfield)[1:-1]] #--> only works in eager execution
+        # tf.map_fn requires all outputs to have the same size
+
+        s = tf.shape(vfield)
+        if len(vfield.shape) == 4:
+            ranges = tf.range(s[1],
+                              dtype=tf.float32), tf.range(s[2],
+                                                          dtype=tf.float32)
+        elif len(vfield.shape) == 5:
+            ranges = (tf.range(s[1], dtype=tf.float32),
+                      tf.range(s[2], dtype=tf.float32),
+                      tf.range(s[3], dtype=tf.float32))
+        elif len(vfield.shape) == 6:
+            ranges = (tf.range(s[1], dtype=tf.float32),
+                      tf.range(s[2], dtype=tf.float32),
+                      tf.range(s[3], dtype=tf.float32),
+                      tf.range(s[4], dtype=tf.float32))
+        else:
+            raise NotImplementedError(
+                'get_px_coords not implemented for {} dimensions'.format(
+                    len(vfield.shape) - 2))
+
+        coords = tf.meshgrid(*ranges, indexing='ij')
+        return tf.stack(coords, axis=-1)
+
+    def unbatched_loss(packed_inputs):
+        y_true, embeddings = packed_inputs
+
+        def not_empty_loss():
+            means, stds = label_mean_hinged_std(y_true, embeddings,
+                                                intra_margin)
+            clustering_loss = K.mean(stds)
+            distances = upper_triangle(pairwise_dist(means))
+            separation_loss = K.mean(K.maximum(inter_margin - distances, 0.))
+            return clustering_loss, separation_loss
+
+        return tf.cond(tf.greater(K.max(y_true), 0), not_empty_loss, lambda:
+                       (0., 0.))
+
+    def loss(y_true, y_pred):
+        '''
+        y_true: instance labels (0=background, -1 ignored)
+        y_pred: vector field
+        '''
+        y_true = tf.cast(y_true, tf.int32)
+
+        embeddings = (y_pred + get_px_coords(y_pred)) * spacing
+
+        clustering_loss, separation_loss = tf.map_fn(unbatched_loss,
+                                                     [y_true, embeddings],
+                                                     (tf.float32, tf.float32),
+                                                     parallel_iterations=16)
+
+        # average on batch
+        return alpha * K.mean(clustering_loss) + beta * K.mean(separation_loss)
+
+    return loss
+
+
+########################################################################
+# mIoU
+# Union with other foreground only (let freely move over background)
+
+
+def flat_top_gaussian(x, margin, order):
+
+    if order % 2 != 0:
+        raise ValueError(
+            'order should be an even integer, got: {}'.format(order))
+
+    sigma = margin * (-2 * np.log(0.5))**(1 / order)
+
+    return tf.exp(-0.5 * (x / sigma)**order)
+
+
+def mIoU_l(y_true, y_pred, margin, gaussian_order=2, eps=1e-12):
+    '''computes per label mean and pixel-wise distance hinged std (TODO check is stricly std). shape will depend on max label accross the mini-batch'''
+
+    fg_mask = tf.cast(tf.greater(y_true, 0), tf.float32)
+    y_true = tf.dtypes.cast(y_true, tf.int32) - 1  # ignore background
+    spatial_axis = tuple(i for i in range(len(y_true.shape) - 1))
+    n_classes = K.maximum(1, K.max(y_true) + 1)
+
+    hot = tf.one_hot(y_true[..., 0], n_classes)
+    # remove labels that don't exist (sampled not guaranted to be sequentially labelled)
+    nonzero_mask = tf.greater(tf.math.count_nonzero(hot, axis=spatial_axis), 0)
+    hot = tf.boolean_mask(hot, nonzero_mask, axis=len(y_true.shape) - 1)
+
+    counts = K.sum(hot, axis=spatial_axis)
+
+    y_pred = y_pred[..., None, :]
+    means = K.sum((hot[..., None] * y_pred),
+                  axis=spatial_axis) / (counts[..., None] + 1e-12)
+
+    center_dist = tf.norm(means[None, None] - y_pred, axis=-1)
+    # convert to probability of belonging to the instance
+    prob = flat_top_gaussian(center_dist, margin, gaussian_order)
+    # ~prob = tf.nn.softmax(-center_dist, axis=-1) # normalize accross channels
+    # ~prob =  1 - center_dist / K.max(center_dist, axis=spatial_axis, keepdims=True)
+    # ~prob = 1 - center_dist / K.sum(center_dist, axis=-1, keepdims=True) # normalize sum accross channels
+    I = K.sum((prob * hot), axis=spatial_axis)
+
+    # ignore background in union, only other objects
+    UplusI = K.sum(fg_mask * (prob + hot), axis=spatial_axis)
+    # ~UplusI = K.sum( (prob + hot), axis=spatial_axis)
+    IoU = (I + eps) / (UplusI - I + eps)
+    jaccard_distance = 1 - IoU
+
+    return K.mean(jaccard_distance)
+
+
+def voting_loss3(margin, spacing=1., gaussian_order=2):
+
+    # TODO broadcast spacing to correct spatial dim
+    # i.e. make sure it cannot be broadcasted to batch size or unexpected behaviour
+    if not isinstance(spacing, float):
+        raise ValueError('anisotropic spacing not implemented')
+
+    def get_px_coords(vfield):
+        '''Returns the coordinates of each pixel. Ignores first dim (batch), and last dim (ch)'''
+
+        # TODO how to write a general solution for non-eager execution?
+        # ranges = [tf.range(s, dtype=tf.float32) for s in tf.shape(vfield)[1:-1]] #--> only works in eager execution
+        # tf.map_fn requires all outputs to have the same size
+
+        s = tf.shape(vfield)
+        if len(vfield.shape) == 4:
+            ranges = tf.range(s[1],
+                              dtype=tf.float32), tf.range(s[2],
+                                                          dtype=tf.float32)
+        elif len(vfield.shape) == 5:
+            ranges = (tf.range(s[1], dtype=tf.float32),
+                      tf.range(s[2], dtype=tf.float32),
+                      tf.range(s[3], dtype=tf.float32))
+        elif len(vfield.shape) == 6:
+            ranges = (tf.range(s[1], dtype=tf.float32),
+                      tf.range(s[2], dtype=tf.float32),
+                      tf.range(s[3], dtype=tf.float32),
+                      tf.range(s[4], dtype=tf.float32))
+        else:
+            raise NotImplementedError(
+                'get_px_coords not implemented for {} dimensions'.format(
+                    len(vfield.shape) - 2))
+
+        coords = tf.meshgrid(*ranges, indexing='ij')
+        return tf.stack(coords, axis=-1)
+
+    def unbatched_loss(packed_inputs):
+        y_true, embeddings = packed_inputs
+
+        def not_empty_loss():
+            return mIoU_l(y_true, embeddings, margin, gaussian_order)
+
+        return tf.cond(tf.greater(K.max(y_true), 0), not_empty_loss,
+                       lambda: 0.)
+
+    def loss(y_true, y_pred):
+        '''
+        y_true: instance labels (0=background, -1 ignored)
+        y_pred: vector field
+        '''
+        y_true = tf.cast(y_true, tf.int32)
+
+        embeddings = (y_pred + get_px_coords(y_pred)) * spacing
+
+        loss = tf.map_fn(unbatched_loss, [y_true, embeddings],
+                         tf.float32,
+                         parallel_iterations=16)
+
+        # average on batch
+        return K.mean(loss)
+
+    return loss
+
+
 # ########################################################################
 # # TODO try with separate dim (like above) instead of norm
 # def voting_loss_pseudo4D(min_instance_dist, dist_factor=0.05, spacing=1., instance_loss='variance'):
