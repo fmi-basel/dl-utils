@@ -54,7 +54,8 @@ class AdditiveSemiConv(Conv):
                 'Got rank={} and filters={} '.format(kwargs['rank'],
                                                      kwargs['filters']))
 
-        self.spacing = tuple(broadcast_to(spacing, self.rank))
+        self.spacing = tuple(float(val) for val in broadcast_to(spacing, self.rank))
+
 
     def call(self, inputs):
         '''
