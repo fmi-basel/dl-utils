@@ -158,7 +158,7 @@ class ImageToClassRecordParser(RecordParserBase):
 
         # Fixed shape appears to be necessary for training with keras.
         if self.fixed_ndim is not None:
-            shape = tf.reshape(sample[self.shape_key], (self.fixed_ndim, ))
+            shape = tf.ensure_shape(sample[self.shape_key], (self.fixed_ndim, ))
         else:
             shape = sample[self.shape_key]
 
@@ -262,9 +262,7 @@ class ImageToSegmentationRecordParser(RecordParserBase):
         shapes = {}
         for key in [self.img_shape_key, self.segm_shape_key]:
             if self.fixed_ndim is not None:
-                shapes[key] = tf.reshape(sample[key], (self.fixed_ndim, ))
-            else:
-                shapes[key] = sample[key]
+                shapes[key] = tf.ensure_shape(sample[key], (self.fixed_ndim, ))
 
         def _reshape_and_cast(val, shape, dtype):
             '''this ensures that tensorflow "knows" the shape of the resulting
