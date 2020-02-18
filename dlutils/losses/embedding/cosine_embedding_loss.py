@@ -4,7 +4,8 @@ import numpy as np
 
 from scipy.ndimage.morphology import grey_dilation
 
-
+# TODO rewrite using InstanceEmbeddingLossBase
+# TODO update test
 def cosine_embedding_loss(neighbor_distance=7, include_background=False):  # TODO
     '''Implementation of:
 
