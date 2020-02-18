@@ -8,23 +8,22 @@ from dlutils.layers.semi_conv import AdditiveSemiConv2D, AdditiveSemiConv3D
 from dlutils.models import load_model
 
 
-@pytest.mark.parametrize('batch_size,spacing',
-                         itertools.product([1, 2, 4],
-                                           [1.25, (0.5, 0.3), (
-                                               1.,
-                                               2,
-                                           )]))
-def test_additive_semiconv2d(batch_size, spacing):
+@pytest.mark.parametrize('batch_size,spacing,kernel_size',
+                         itertools.product([1, 2, 4], [
+                             1.25,
+                             (0.5, 0.3),
+                             (1, 2),
+                         ], [1, 3, 5]))
+def test_additive_semiconv2d(batch_size, spacing, kernel_size):
     '''test additive scaling layer in 2D.
 
     '''
     ndim = 2
     model = tf.keras.models.Sequential([
-        AdditiveSemiConv2D(
-            spacing=spacing,
-            kernel_size=3,
-            input_shape=(None, None, 1),
-            padding='same')
+        AdditiveSemiConv2D(spacing=spacing,
+                           kernel_size=kernel_size,
+                           input_shape=(None, None, 1),
+                           padding='same')
     ])
 
     model.compile(loss='mae')
@@ -59,11 +58,10 @@ def test_additive_semiconv3d(batch_size, spacing):
     '''
     ndim = 3
     model = tf.keras.models.Sequential([
-        AdditiveSemiConv3D(
-            spacing=spacing,
-            kernel_size=3,
-            input_shape=(None, None, None, 1),
-            padding='same')
+        AdditiveSemiConv3D(spacing=spacing,
+                           kernel_size=3,
+                           input_shape=(None, None, None, 1),
+                           padding='same')
     ])
 
     model.compile(loss='mae')
@@ -102,11 +100,10 @@ def test_raise_spacing_2d(spacing):
 
     '''
     with pytest.raises(ValueError):
-        AdditiveSemiConv2D(
-            spacing=spacing,
-            kernel_size=3,
-            input_shape=(None, None, 1),
-            padding='same')
+        AdditiveSemiConv2D(spacing=spacing,
+                           kernel_size=3,
+                           input_shape=(None, None, 1),
+                           padding='same')
 
 
 @pytest.mark.parametrize('spacing', [(2, 1.0), (1, 2, 3, 4)])
@@ -115,11 +112,10 @@ def test_raise_spacing_3d(spacing):
 
     '''
     with pytest.raises(ValueError):
-        AdditiveSemiConv3D(
-            spacing=spacing,
-            kernel_size=3,
-            input_shape=(None, None, None, 1),
-            padding='same')
+        AdditiveSemiConv3D(spacing=spacing,
+                           kernel_size=3,
+                           input_shape=(None, None, None, 1),
+                           padding='same')
 
 
 @pytest.mark.parametrize('spacing', [1, (1.2, 1.2, 3.), np.asarray((1.))])
@@ -128,14 +124,13 @@ def test_save_load(tmpdir, spacing):
 
     '''
     model = tf.keras.models.Sequential([
-        AdditiveSemiConv3D(
-            spacing=spacing,
-            kernel_size=3,
-            input_shape=(None, None, None, 1),
-            padding='same')
+        AdditiveSemiConv3D(spacing=spacing,
+                           kernel_size=3,
+                           input_shape=(None, None, None, 1),
+                           padding='same')
     ])
 
-    # dump model.
+    # dump model with layer.
     output_path = tmpdir / 'model.h5'
     assert not output_path.exists()
     tf.keras.models.save_model(model, str(output_path))
