@@ -16,8 +16,8 @@ def parse_from_tfrecords(filename_pattern,
 
     Parameters
     ----------
-    filename_pattern : string
-        string matching all filenames that should be used in the dataset.
+    filename_pattern : string or list of strings.
+        string(s) matching all filenames that should be used in the dataset.
         For example: 'data/train/*tfrecord'
     parser_fn : function
         Function to parse a single example. Responsible for converting the
@@ -34,16 +34,23 @@ def parse_from_tfrecords(filename_pattern,
 
     '''
     if cycle_length is None:
-        cycle_length = len(glob(filename_pattern))
+        try:
+            cycle_length = len(glob(filename_pattern))
+        except TypeError:
+            try:
+                cycle_length = sum(
+                    len(glob(pattern)) for pattern in filename_pattern)
+            except:
+                raise ValueError(
+                    'Could not determine cycle_length from filename_pattern!')
 
     # collect files.
     filenames = tf.data.Dataset.list_files(filename_pattern)
 
     # read from all with interleave...
-    dataset = filenames.interleave(
-        tf.data.TFRecordDataset,
-        cycle_length=cycle_length,
-        num_parallel_calls=num_parallel_calls)
+    dataset = filenames.interleave(tf.data.TFRecordDataset,
+                                   cycle_length=cycle_length,
+                                   num_parallel_calls=num_parallel_calls)
     # ...and parse the samples.
     dataset = dataset.map(parser_fn, num_parallel_calls=num_parallel_calls)
     return dataset
@@ -63,8 +70,8 @@ def create_dataset(filename_pattern,
 
     Parameters
     ----------
-    filename_pattern : string
-        string matching all filenames that should be used in the dataset.
+    filename_pattern : string or list of strings
+        strings matching all filenames that should be used in the dataset.
         For example: 'data/train/*tfrecord'
     batch_size : int
         Size of batches to be generated.
@@ -104,31 +111,30 @@ def create_dataset(filename_pattern,
     prefetch_buffer = tf.data.experimental.AUTOTUNE
 
     with tf.device('/cpu:0'):  # place dataset pipeline on cpu.
-        dataset = parse_from_tfrecords(
-            filename_pattern,
-            parser_fn=parser_fn,
-            num_parallel_calls=num_parallel_calls)
+        dataset = parse_from_tfrecords(filename_pattern,
+                                       parser_fn=parser_fn,
+                                       num_parallel_calls=num_parallel_calls)
 
         if cache_after_parse:
             dataset = dataset.cache()
 
         if patch_size is not None:
-            dataset = dataset.map(
-                random_crop(patch_size), num_parallel_calls=num_parallel_calls)
+            dataset = dataset.map(random_crop(patch_size),
+                                  num_parallel_calls=num_parallel_calls)
 
         # apply image augmentations.
         if transforms is not None:
             for fun in transforms:
-                dataset = dataset.map(
-                    fun, num_parallel_calls=num_parallel_calls)
+                dataset = dataset.map(fun,
+                                      num_parallel_calls=num_parallel_calls)
 
         if shuffle and shuffle_buffer >= 2:
-            dataset = dataset.shuffle(
-                shuffle_buffer, reshuffle_each_iteration=True)
+            dataset = dataset.shuffle(shuffle_buffer,
+                                      reshuffle_each_iteration=True)
 
-        dataset = dataset.batch(
-            batch_size, drop_remainder=drop_remainder).prefetch(
-                buffer_size=prefetch_buffer)
+        dataset = dataset.batch(batch_size,
+                                drop_remainder=drop_remainder).prefetch(
+                                    buffer_size=prefetch_buffer)
 
     return dataset
 
@@ -150,7 +156,10 @@ def create_dataset_for_training(filename_pattern,
     return dataset
 
 
-def create_dataset_for_validation(filename_pattern, batch_size, parser_fn):
+def create_dataset_for_validation(filename_pattern,
+                                  batch_size,
+                                  parser_fn,
+                                  transforms=None):
     '''convenience wrapper for create_dataset for validation set.
 
     See create_dataset for args.
@@ -163,7 +172,7 @@ def create_dataset_for_validation(filename_pattern, batch_size, parser_fn):
         shuffle=True,  # for layers that might depend on batch composition.
         shuffle_buffer=100,
         drop_remainder=True,  # needed for keras training loop.
-    )
+        transforms=transforms)
 
 
 def create_linear_dataset(fname,
@@ -202,9 +211,9 @@ def create_linear_dataset(fname,
 
         if transforms is not None:
             for fun in transforms:
-                dataset = dataset.map(
-                    fun, num_parallel_calls=num_parallel_calls)
+                dataset = dataset.map(fun,
+                                      num_parallel_calls=num_parallel_calls)
 
-        dataset = dataset.batch(
-            batch_size, drop_remainder=False).prefetch(prefetch_buffer)
+        dataset = dataset.batch(batch_size,
+                                drop_remainder=False).prefetch(prefetch_buffer)
         return dataset
