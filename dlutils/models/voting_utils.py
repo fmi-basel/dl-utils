@@ -12,7 +12,6 @@ from dlutils.models.hourglass import bottleneck_conv_block, _stack_layers, hourg
 # TODO consider removing anistropic pooling and spacing argument from hourglass if strided/transposed conv is the preferred solution
 
 
-# simple ###############################################################
 def add_voting_heads(base_model, n_classes):
     '''Splits outputs of a delta loop base_model into instance vector field and semantic class.
     
@@ -34,7 +33,8 @@ def add_voting_heads(base_model, n_classes):
     semantic_class = y_preds[..., spatial_dims:spatial_dims + n_classes]
 
     # rename outputs
-    deltas = Lambda(lambda x: x, name='deltas')(deltas)
+    # ~deltas = Lambda(lambda x: x, name='deltas')(deltas)
+    deltas = Lambda(lambda x: x, name='deltas')(y_preds)  # tmp trial
     vfield = Lambda(lambda x: x, name='vfield')(vfield)
     semantic_class = Lambda(lambda x: x, name='semantic_class')(semantic_class)
 
