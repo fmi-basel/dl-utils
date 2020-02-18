@@ -30,17 +30,6 @@ def test_JaccardLoss():
     np.testing.assert_almost_equal(perfect_loss, 0., decimal=3)
 
 
-def get_dummy_dataset(n_samples, batch_size, repeats=None):
-    '''Creates a dummy tensorflow dataset with random noise as input
-    and a mask where input>0 as target.'''
-    def gen():
-        for i in range(n_samples):
-            yield tf.random.normal((17, 23, 1))
-
-    return (tf.data.Dataset.from_generator(gen, (tf.float32),
-                                           output_shapes=(17, 23, 1)).batch(1))
-
-
 def test_JaccardLoss_training():
     '''Verifies that the JaccardLoss can be used to learn a simple thresholding operation.'''
 
