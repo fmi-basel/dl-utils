@@ -6,10 +6,10 @@ import tensorflow as tf
 
 from dlutils.dataset.cropping import random_crop
 
-
 CROP_TEST_PARAMS = list(
-    itertools.product([(5, 10, 11, 2), (20, 10, 3), (5, 10)],  # patch_size
-                      [2, 5]))  # n_inputs
+    itertools.product(
+        [(5, 10, 11, 2), (20, 10, 3), (5, 10)],  # patch_size
+        [2, 5]))  # n_inputs
 
 
 def pairwise(iterable):
@@ -38,10 +38,6 @@ def test_random_crop_on_dict(patch_size, n_inputs):
 
     for _ in range(10):
         patch = cropper(input_dict)
-
-        print('Patch')
-        for key, val in patch.items():
-            print(key, val.shape)
 
         # check if patches have the correct shape
         for key in input_dict.keys():
@@ -81,10 +77,6 @@ def test_random_crop_on_list(patch_size, n_inputs):
     for _ in range(10):
         patch = cropper(input_list)
 
-        print('Patch')
-        for val in patch:
-            print(val.shape)
-
         # check if patches have the correct shape
         for vals in patch:
             vals = vals.numpy()
@@ -95,7 +87,6 @@ def test_random_crop_on_list(patch_size, n_inputs):
 
         # check if all inputs were cropped in the same location
         for (ii, first), (jj, second) in pairwise(enumerate(patch, start=1)):
-            print(ii, jj)
             assert np.all(first.numpy() * jj == second.numpy() * ii)
 
         # make sure we're not drawing the same patch over and over
@@ -103,7 +94,6 @@ def test_random_crop_on_list(patch_size, n_inputs):
             assert not np.all(vals.numpy() == first_patch[ii].numpy())
 
 
-@pytest.mark.xfail
 # yapf: disable
 @pytest.mark.parametrize(
     'shapes',
@@ -112,18 +102,35 @@ def test_random_crop_on_list(patch_size, n_inputs):
      [(13, 15, 1), (13, 15)],
      [(13, 4, 1), (13, 4, 1), (13, 4, 1), (11, 4, 1)]])
 # yapf: enable
-def test_random_crop_mismatching_shapes(shapes):
+def test_mismatching_shapes(shapes):
     '''test if shape mismatches in the input raise.
-
-    This currently fails because the dynamic check for shapes
-    makes random_crop unusable within tf.data pipelines.
 
     '''
     patch_size = (13, 13, 1)
     inputs = [np.ones(shape) for shape in shapes]
 
     cropper = random_crop(patch_size)
-    with pytest.raises(ValueError):
+    with pytest.raises(tf.errors.InvalidArgumentError):
+        cropper(inputs)
+
+
+# yapf: disable
+@pytest.mark.parametrize(
+    'shapes',
+    [[(4, 5, 6, 7),  (4, 5, 8, 7)],
+     [(13, 15, 1), (13, 15)],
+     [(13, 4, 1), (13, 4, 1), (13, 4, 1), (11, 4, 1)]])
+# yapf: enable
+def test_mismatching_shapes_flexible(shapes):
+    '''test if shape mismatches in the input raise with flexible
+    channel size.
+
+    '''
+    patch_size = (13, 13, -1)
+    inputs = [np.ones(shape) for shape in shapes]
+
+    cropper = random_crop(patch_size)
+    with pytest.raises(tf.errors.InvalidArgumentError):
         cropper(inputs)
 
 
