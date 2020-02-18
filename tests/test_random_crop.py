@@ -136,20 +136,26 @@ def test_mismatching_shapes_flexible(shapes):
 
 # yapf: disable
 @pytest.mark.parametrize(
-    'shapes',
-    [[(13, 15, 1), (13, 15, 2)],
-     [(15, 14, 1), (15, 14, 4), (15, 14, 3)]])
+    'shapes, patch_size',
+    itertools.product([[(13, 15, 1), (13, 15, 2)],
+                       [(15, 14, 1), (15, 14, 4), (15, 14, 3)]],
+                      [(12, 13, -1), (-1, 13, -1), (11, -1, -1), (-1, -1, -1)]))
 # yapf: enable
-def test_random_crop_flexible(shapes):
-    '''test if shape mismatches in the input raise.
+def test_random_crop_flexible(shapes, patch_size):
+    '''test cropping with flexible channels.
 
     '''
-    patch_size = (13, 13, -1)
     inputs = [np.ones(shape) for shape in shapes]
 
     cropper = random_crop(patch_size)
     patches = cropper(inputs)
 
+    patch_size = np.asarray(patch_size)
+    is_flexible = patch_size == -1
+
     for ii, patch in enumerate(patches):
-        assert np.all(patch.shape[:-1] == patch_size[:-1])
-        assert patch.shape[-1] == inputs[ii].shape[-1]
+
+        for dim in range(len(patch_size)):
+            assert (patch.shape[dim] == patch_size[dim]
+                    or (patch_size[dim] == -1
+                        and patch.shape[dim] == inputs[ii].shape[dim]))
