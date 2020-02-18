@@ -112,7 +112,7 @@ def random_gaussian_offset(offset_sigma, keys):
     '''
 
     def _distorter(input_dict):
-        '''adds gaussian noise to the entries in input_dict that
+        '''adds offset to the entries in input_dict that
         are indexed by keys.
 
         '''
