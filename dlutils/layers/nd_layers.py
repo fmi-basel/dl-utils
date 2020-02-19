@@ -2,6 +2,7 @@
 
 from tensorflow.keras.layers import Conv3D, MaxPool3D, UpSampling3D
 from tensorflow.keras.layers import Conv2D, MaxPool2D, UpSampling2D
+from dlutils.layers.semi_conv import AdditiveSemiConv2D, AdditiveSemiConv3D
 
 
 def get_nd_conv(ndim):
@@ -13,6 +14,17 @@ def get_nd_conv(ndim):
         raise ValueError(
             'convolution on {} spatial dims not supported, expected to 2 or 3'.
             format(ndim))
+
+
+def get_nd_semiconv(ndim):
+    if ndim == 2:
+        return AdditiveSemiConv2D
+    elif ndim == 3:
+        return AdditiveSemiConv3D
+    else:
+        raise ValueError(
+            'Additive semi convolution on {} spatial dims not supported, expected to 2 or 3'
+            .format(ndim))
 
 
 def get_nd_maxpooling(ndim):
