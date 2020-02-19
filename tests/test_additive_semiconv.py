@@ -5,7 +5,15 @@ import tensorflow as tf
 import pytest
 
 from dlutils.layers.semi_conv import AdditiveSemiConv2D, AdditiveSemiConv3D
+from dlutils.layers.nd_layers import get_nd_semiconv
 from dlutils.models import load_model
+
+
+def test_get_nd_semiconv():
+    '''test get_nd wrapper'''
+
+    assert get_nd_semiconv(2) == AdditiveSemiConv2D
+    assert get_nd_semiconv(3) == AdditiveSemiConv3D
 
 
 @pytest.mark.parametrize('batch_size,spacing,kernel_size',
