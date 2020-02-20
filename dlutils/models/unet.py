@@ -1,15 +1,15 @@
 from tensorflow.keras.utils import get_source_inputs
 
+import tensorflow as tf
+
 from tensorflow.keras.layers import Input
-from tensorflow.keras.layers import Convolution2D
-from tensorflow.keras.layers import MaxPooling2D
-from tensorflow.keras.layers import Conv2DTranspose
-from tensorflow.keras.layers import Dropout
-from tensorflow.keras.layers import BatchNormalization
-from tensorflow.keras.layers import concatenate
+from tensorflow.keras.layers import BatchNormalization, LayerNormalization
 from tensorflow.keras.models import Model
 
 from dlutils.layers.padding import DynamicPaddingLayer, DynamicTrimmingLayer
+from dlutils.layers.nd_layers import get_nd_conv
+from dlutils.layers.nd_layers import get_nd_maxpooling
+from dlutils.layers.nd_layers import get_nd_upsampling
 
 
 def get_model_name(width, n_levels, dropout, with_bn, *args, **kwargs):
@@ -23,154 +23,167 @@ def get_model_name(width, n_levels, dropout, with_bn, *args, **kwargs):
     return name
 
 
-def unet_block(base_features, n_levels, n_blocks_per_level, dropout,
-               base_block, **block_kwargs):
+class UnetBuilder:
     '''
     '''
 
-    block_params = dict(padding='same', activation='relu')
-    block_params.update(block_kwargs)
-
-    pooling = MaxPooling2D
-    upsampling = Conv2DTranspose
-
-    def features_from_level(level):
-        features_out = base_features * 2**level
-        return features_out
-
-    def _get_name(prefix, level, suffix):
-        return '{prefix}_L{level:02}_{suffix}'.format(
-            prefix=prefix, level=level, suffix=suffix)
-
-    def block(input_tensor):
+    def __init__(self,
+                 conv_layer,
+                 upsampling_layer,
+                 downsampling_layer,
+                 n_levels,
+                 n_blocks,
+                 base_features,
+                 norm_layer=None,
+                 activation_layer=tf.keras.layers.LeakyReLU,
+                 conv_params={}):
         '''
         '''
-        links = []
+        self.n_levels = n_levels
+        self.n_blocks = n_blocks
+        self.base_features = base_features
 
+        self.conv_params = {
+            'activation': 'linear',
+            'padding': 'same',
+            'kernel_size': 3
+        }
+        self.conv_params.update(conv_params)
+
+        self.conv_layer = conv_layer
+        self.norm_layer = norm_layer
+        self.upsampling_layer = upsampling_layer
+        self.downsampling_layer = downsampling_layer
+        self.activation_layer = activation_layer
+
+    def get_model_name(self):
+        '''
+        '''
+        name = 'unet-W{}-L{}-B{}'.format(self.base_features, self.n_levels,
+                                         self.n_blocks)
+        if self.norm_layer is not None:
+            if self.norm_layer == BatchNormalization:
+                name += '-BN'
+            elif self.norm_layer == LayerNormalization:
+                name += '-LN'
+        return name
+
+    def add_single_block(self, input_tensor, filters, **kwargs):
+        '''
+        '''
+        with tf.name_scope('Block'):
+            out_tensor = self.conv_layer(
+                filters=filters, **self.conv_params)(input_tensor)
+            if self.norm_layer is not None:
+                out_tensor = self.norm_layer()(out_tensor)
+            out_tensor = self.activation_layer()(out_tensor)
+        return out_tensor
+
+    def add_downsampling(self, input_tensor):
+        '''
+        '''
+        return self.downsampling_layer()(input_tensor)
+
+    def add_upsampling(self, input_tensor):
+        '''
+        '''
+        return self.upsampling_layer()(input_tensor)
+
+    def add_combiner(self, input_tensors):
+        '''
+        '''
+        return tf.keras.layers.Concatenate()(input_tensors)
+
+    def features_of_level(self, level):
+        '''
+        '''
+        return self.base_features * 2**level
+
+    def build_unet_block(self, input_tensor):
+        '''
+        '''
+        skips = {}
         x = input_tensor
 
-        # contracting path.
-        prefix = 'CB'
-        for level in range(n_levels - 1):
-            for count in range(n_blocks_per_level):
-                x = base_block(
-                    filters=features_from_level(level),
-                    name=_get_name(prefix, level, 'C%d' % count),
-                    **block_params)(x)
+        # downstream
+        for level in range(self.n_levels - 1):
+            for _ in range(self.n_blocks):
+                x = self.add_single_block(
+                    x, filters=self.features_of_level(level))
+            skips[level] = x
+            x = self.add_downsampling(x)
 
-            if dropout is not None and dropout > 0.:
-                x = Dropout(dropout, name=_get_name(prefix, level, 'DROP'))(x)
+        # bottom
+        for _ in range(self.n_blocks):
+            x = self.add_single_block(
+                x, filters=self.features_of_level(self.n_levels - 1))
 
-            links.append(x)
-            x = pooling(2, name=_get_name(prefix, level, 'MP'))(x)
+        # upstream
+        for level in reversed(range(self.n_levels - 1)):
 
-        # compressed representation
-        for count in range(n_blocks_per_level):
-            x = base_block(
-                filters=features_from_level(n_levels - 1),
-                name=_get_name(prefix, n_levels - 1, 'C%d' % count),
-                **block_params)(x)
+            x = self.add_upsampling(x)
+            self.add_combiner([x, skips[level]])
 
-        if dropout is not None and dropout > 0.:
-            x = Dropout(
-                dropout, name=_get_name(prefix, n_levels - 1, 'DROP'))(x)
+            for _ in range(self.n_blocks):
+                x = self.add_single_block(
+                    x, filters=self.features_of_level(level))
 
-        # expanding path.
-        prefix = 'EB'
-        for level in reversed(range(n_levels - 1)):
-            x = upsampling(
-                filters=features_from_level(level),
-                strides=2,
-                kernel_size=2,
-                name=_get_name(prefix, level, 'DC'))(x)
-            x = concatenate(
-                [x, links[level]], name=_get_name(prefix, level, 'CONC'))
-
-            for count in range(n_blocks_per_level):
-                x = base_block(
-                    filters=features_from_level(level),
-                    name=_get_name(prefix, level, 'C%d' % (count + 1)),
-                    **block_params)(x)
-
-            if dropout is not None and dropout > 0.:
-                x = Dropout(dropout, name=_get_name(prefix, level, 'DROP'))(x)
         return x
-
-    return block
-
-
-def ConvolutionWithBatchNorm(name,
-                             conv=Convolution2D,
-                             activation='relu',
-                             **conv_kwargs):
-    '''
-    '''
-
-    def block(input_tensor):
-        x = conv(**conv_kwargs, name=name + '_cnv')(input_tensor)
-        x = BatchNormalization(name=name + '_bn')(x)
-        return x
-
-    return block
 
 
 def GenericUnetBase(input_shape=None,
                     input_tensor=None,
                     batch_size=None,
-                    dropout=None,
                     with_bn=False,
                     width=1,
                     n_levels=5,
                     n_blocks=2):
-    '''Constructs a basic U-Net.
+    '''UNet constructor for 2D and 3D.
 
-    Based on: Ronneberger et al. "U-Net: Convolutional Networks for
-    BiomedicalImage Segmentation", MICCAI 2015
+    NOTE all dimensions are treated identically.
 
     '''
-    base_features = int(width * 64)
+    if input_tensor is None and input_shape is None:
+        raise ValueError('Either input_shape or input_tensor must be given!')
 
-    # Assemble input
-    # NOTE we use flexible sized inputs per default.
     if input_tensor is None:
         img_input = Input(
-            batch_shape=(batch_size, ) + (None, None, input_shape[-1]),
-            name='input')
+            batch_shape=(batch_size, ) + input_shape, name='input')
     else:
         img_input = input_tensor
 
-    x = DynamicPaddingLayer(factor=2**n_levels, name='dpad')(img_input)
+    ORIGINAL_FEATURES = 64
 
-    if with_bn:
-        base_block = ConvolutionWithBatchNorm
-    else:
-        base_block = Convolution2D
+    # dont count batch and channel dimension.
+    spatial_ndim = len(img_input.shape) - 2
 
-    x = unet_block(
-        dropout=dropout,
+    builder = UnetBuilder(
+        conv_layer=get_nd_conv(spatial_ndim),
+        downsampling_layer=get_nd_maxpooling(spatial_ndim),
+        upsampling_layer=get_nd_upsampling(spatial_ndim),
+        norm_layer=BatchNormalization if with_bn else None,
         n_levels=n_levels,
-        base_features=base_features,
-        n_blocks_per_level=n_blocks,
-        base_block=base_block,
-        kernel_size=3)(x)
+        n_blocks=n_blocks,
+        base_features=int(width * ORIGINAL_FEATURES))
 
-    x = DynamicTrimmingLayer(name='dtrim')([img_input, x])
+    # add padding...
+    x = DynamicPaddingLayer(
+        factor=2**n_levels, ndim=spatial_ndim + 2, name='dpad')(img_input)
+
+    # construct unet.
+    x = builder.build_unet_block(x)
+
+    # ...and remove padding.
+    x = DynamicTrimmingLayer(
+        ndim=spatial_ndim + 2, name='dtrim')([img_input, x])
 
     if input_tensor is not None:
         inputs = get_source_inputs(input_tensor)
     else:
         inputs = img_input
 
-    return Model(
-        inputs=inputs,
-        outputs=x,
-        name=get_model_name(
-            width=width,
-            n_levels=n_levels,
-            n_blocks=n_blocks,
-            dropout=dropout,
-            with_bn=False))
+    return Model(inputs=inputs, outputs=x, name=builder.get_model_name())
 
 
-# for backwards compatibility
+# Alias for backward compatibility
 UnetBase = GenericUnetBase

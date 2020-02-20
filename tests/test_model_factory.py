@@ -17,21 +17,20 @@ def cleanup():
 
 
 @pytest.mark.parametrize(
-    "name,input_shape,n_levels,dropout",
+    "name,input_shape,n_levels",
     list(
         product(
             ['unet', ],
-            [(259, 297, 1), (300, 313, 2)],  # input shapes
-            [3, 5],  # n_levels
-            [0, 0.05],  # dropout
+            [(32, 31, 1), (33, 47, 2)],  # input shapes
+            [2, 4],  # n_levels
         )))
-def test_constructor(name, input_shape, n_levels, dropout):
+def test_constructor(name, input_shape, n_levels):
     '''
     '''
     batch_size = 3
 
     model = construct_base_model(
-        name=name, input_shape=input_shape, n_levels=n_levels, dropout=dropout)
+        name=name, input_shape=input_shape, n_levels=n_levels)
 
     pred_names = ['pred_cell', 'pred_border']
     model = add_fcn_output_layers(model, pred_names, [1, 1])
@@ -44,9 +43,6 @@ def test_constructor(name, input_shape, n_levels, dropout):
         })
 
     model.summary()
-
-    print(name)
-    print(model.name)
 
     assert name in model.name.lower()
 

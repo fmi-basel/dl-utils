@@ -1,12 +1,17 @@
+from functools import partial
 import pytest
 import tensorflow as tf
 import numpy as np
 import h5py
 
 from dlutils.models import load_model
+from dlutils.models.unet import GenericUnetBase
 from dlutils.models.heads import split_output_into_instance_seg
 from dlutils.layers.padding import DynamicPaddingLayer, DynamicTrimmingLayer
 from dlutils.training.callbacks import ModelConfigSaver
+
+###
+# Setup model constructors.
 
 
 def build_simple_model():
@@ -45,6 +50,8 @@ def build_instance_seg_heads_model():
 
 
 def convert_ndarray_to_list(config):
+    '''
+    '''
     if isinstance(config, dict):
         for key, val in config.items():
             if isinstance(val, np.ndarray):
@@ -72,9 +79,19 @@ def compare_models(left, right):
         np.testing.assert_allclose(left_w, right_w)
 
 
-@pytest.mark.parametrize(
-    'model_constructor',
-    [build_simple_model, build_custom_model, build_instance_seg_heads_model])
+MODEL_CONSTRUCTORS = [
+    build_simple_model, build_custom_model, build_instance_seg_heads_model,
+    partial(GenericUnetBase,
+            input_shape=(None, None, 1),
+            width=0.5,
+            n_levels=2)
+]
+
+###
+# Actual tests.
+
+
+@pytest.mark.parametrize('model_constructor', MODEL_CONSTRUCTORS)
 def test_default_save_load_h5(tmpdir, model_constructor):
     '''test saving/loading with default as h5.
 
@@ -105,9 +122,7 @@ def test_default_save_load_h5(tmpdir, model_constructor):
     compare_models(model, loaded_model)
 
 
-@pytest.mark.parametrize(
-    'model_constructor',
-    [build_simple_model, build_custom_model, build_instance_seg_heads_model])
+@pytest.mark.parametrize('model_constructor', MODEL_CONSTRUCTORS)
 def test_model_config_saver(tmpdir, model_constructor):
     '''basic test of model IO with ModelConfigSaver
 
