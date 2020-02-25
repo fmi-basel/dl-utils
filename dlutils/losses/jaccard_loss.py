@@ -9,8 +9,8 @@ class JaccardLoss(tf.keras.losses.Loss):
     in deep neural networks for image segmentation." 
     International symposium on visual computing. Springer, Cham, 2016.
     '''
-    def __init__(self, eps=1e-6):
-        super().__init__()
+    def __init__(self, eps=1e-6, *args, **kwargs):
+        super().__init__(*args, **kwargs)
 
         self.eps = eps
 
