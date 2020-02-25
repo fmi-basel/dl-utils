@@ -140,12 +140,11 @@ class InstanceEmbeddingLossBase(tf.keras.losses.Loss):
                                              1, len(y_true.shape))))
 
         def map_to_not_empty():
-            nonlocal y_true, y_pred
+            y_true_masked = tf.boolean_mask(y_true, nonnegative_mask, axis=0)
+            y_pred_masked = tf.boolean_mask(y_pred, nonnegative_mask, axis=0)
 
-            y_true = tf.boolean_mask(y_true, nonnegative_mask, axis=0)
-            y_pred = tf.boolean_mask(y_pred, nonnegative_mask, axis=0)
-
-            loss = tf.map_fn(self._unbatched_loss, [y_true, y_pred],
+            loss = tf.map_fn(self._unbatched_loss,
+                             [y_true_masked, y_pred_masked],
                              tf.float32,
                              parallel_iterations=self.parallel_iterations)
 
