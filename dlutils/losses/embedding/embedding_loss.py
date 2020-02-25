@@ -69,7 +69,14 @@ def _unbatched_embedding_center(hot, y_pred):
 def _unbatched_embeddings_to_prob(embeddings, centers, margin,
                                   clip_probs=None):
     '''
-    Converts embeddings to probability maps given instances centers.
+    Converts embeddings to probability maps by passing their distances 
+    from the given centers through a gaussian function:
+    
+    p(e_i) = exp(-2 * (norm(e_i-center)/sigma)**2)
+    
+    where: margin = sigma * sqrt(-2 * ln(0.5))
+    
+    i.e. embeddings further than margin away from a center have a probability < 0.5
     
     Args:
         embeddings: [spacial...dims, embedding_size]
@@ -77,7 +84,14 @@ def _unbatched_embeddings_to_prob(embeddings, centers, margin,
             [npoint, embedding_size]
         margin: distance from center where instance probability = 0.5
         clip_probs: clips probabilities values if a (low,high) tuple is provided
+        
+    Notes:
     
+    For more details see
+    
+    Neven, Davy, et al. "Instance segmentation by jointly optimizing spatial
+    embeddings and clustering bandwidth." Proceedings of the IEEE Conference
+    on Computer Vision and Pattern Recognition. 2019.
     '''
     def calc_probs(center_distances):
         sigma = margin * (-2 * np.log(0.5))**-0.5
