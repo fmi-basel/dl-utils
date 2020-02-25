@@ -22,8 +22,6 @@ def test__unbatched_soft_jaccard():
     m.update_state(yt, tf.cast(yp, tf.int32))
     expected_loss = 1. - m.result().numpy()
 
-    print(yt.squeeze())
-    print(yp.squeeze())
     one_hot = tf.cast(tf.one_hot(tf.squeeze(yt, -1), n_classes), tf.float32)
     probs = tf.cast(tf.one_hot(tf.squeeze(yp, -1), n_classes), tf.float32)
     loss = _unbatched_soft_jaccard(one_hot, probs, fg_only=False,
@@ -125,6 +123,7 @@ def test__unbatched_embeddings_to_prob_1D():
 
 
 def test_InstanceEmbeddingLossBase():
+    '''Checks that the reduction of _unbatched_loss ignores unlabeled entries'''
     class InstanceMeanIoUEmbeddingLoss(InstanceEmbeddingLossBase):
         def _unbatched_loss(self, packed):
             y_true, y_pred = packed
