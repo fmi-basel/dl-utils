@@ -1,15 +1,24 @@
-from tensorflow.keras.utils import get_source_inputs
+from functools import partial
 
 import tensorflow as tf
-
+from tensorflow.keras.utils import get_source_inputs
 from tensorflow.keras.layers import Input
 from tensorflow.keras.layers import BatchNormalization, LayerNormalization
 from tensorflow.keras.models import Model
+
+from tensorflow_addons.layers import GroupNormalization
 
 from dlutils.layers.padding import DynamicPaddingLayer, DynamicTrimmingLayer
 from dlutils.layers.nd_layers import get_nd_conv
 from dlutils.layers.nd_layers import get_nd_maxpooling
 from dlutils.layers.nd_layers import get_nd_upsampling
+
+def get_nd_upconv(spatial_ndim):
+    if spatial_ndim == 2:
+        return tf.keras.layers.Conv2DTranspose
+    if spatial_ndim == 3:
+        return tf.keras.layers.Conv3DTranspose
+    raise NotImplementedError('Unknown upconvolution layer for ndim={}'.format(spatial_ndim))
 
 
 def get_model_name(width, n_levels, dropout, with_bn, *args, **kwargs):
@@ -50,6 +59,8 @@ class UnetBuilder:
         }
         self.conv_params.update(conv_params)
 
+        self.norm_params = {'axis': -1}
+
         self.conv_layer = conv_layer
         self.norm_layer = norm_layer
         self.upsampling_layer = upsampling_layer
@@ -66,6 +77,8 @@ class UnetBuilder:
                 name += '-BN'
             elif self.norm_layer == LayerNormalization:
                 name += '-LN'
+            elif self.norm_layer == GroupNormalization:
+                name += '-GN'
         return name
 
     def add_single_block(self, input_tensor, filters, **kwargs):
@@ -75,7 +88,7 @@ class UnetBuilder:
             out_tensor = self.conv_layer(
                 filters=filters, **self.conv_params)(input_tensor)
             if self.norm_layer is not None:
-                out_tensor = self.norm_layer()(out_tensor)
+                out_tensor = self.norm_layer(**self.norm_params)(out_tensor)
             out_tensor = self.activation_layer()(out_tensor)
         return out_tensor
 
@@ -122,7 +135,7 @@ class UnetBuilder:
         for level in reversed(range(self.n_levels - 1)):
 
             x = self.add_upsampling(x)
-            self.add_combiner([x, skips[level]])
+            x = self.add_combiner([x, skips[level]])
 
             for _ in range(self.n_blocks):
                 x = self.add_single_block(
@@ -137,7 +150,8 @@ def GenericUnetBase(input_shape=None,
                     with_bn=False,
                     width=1,
                     n_levels=5,
-                    n_blocks=2):
+                    n_blocks=2,
+                    downsampling=None):
     '''UNet constructor for 2D and 3D.
 
     NOTE all dimensions are treated identically.
@@ -167,11 +181,27 @@ def GenericUnetBase(input_shape=None,
         base_features=int(width * ORIGINAL_FEATURES))
 
     # add padding...
+    padding_factor = 2**n_levels
+    if downsampling is not None:
+        padding_factor *= max(downsampling)
     x = DynamicPaddingLayer(
-        factor=2**n_levels, ndim=spatial_ndim + 2, name='dpad')(img_input)
+        factor=padding_factor, ndim=spatial_ndim + 2, name='dpad')(img_input)
 
-    # construct unet.
-    x = builder.build_unet_block(x)
+    if downsampling is not None:
+        x = get_nd_conv(spatial_ndim)(filters=builder.base_features,
+                                      strides=downsampling,
+                                      kernel_size=downsampling,
+                                      padding='same',activation='linear')(x)
+        # construct unet.
+        x = builder.build_unet_block(x)
+
+        x = get_nd_upconv(spatial_ndim)(filters=builder.base_features,
+                                        strides=downsampling,
+                                        kernel_size=downsampling,
+                                        padding='same',activation='linear')(x)
+
+    else:
+        x = builder.build_unet_block(x)
 
     # ...and remove padding.
     x = DynamicTrimmingLayer(
