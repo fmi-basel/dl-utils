@@ -26,10 +26,8 @@ def tfrecord_from_iterable(output_path, iterable, serialize_fn, verbose=False):
 
     '''
     if verbose:
-        iterable = tqdm(iterable,
-                        desc=os.path.basename(output_path),
-                        leave=True,
-                        ncols=80)
+        iterable = tqdm(
+            iterable, desc=os.path.basename(output_path), leave=True, ncols=80)
     with tf.io.TFRecordWriter(output_path) as writer:
         for sample in iterable:
             writer.write(serialize_fn(*sample).SerializeToString())
@@ -73,6 +71,7 @@ class RecordParserBase(abc.ABC):
     - Facilitating future extension of parsers.
 
     '''
+
     @abc.abstractmethod
     def serialize(self, *args):
         '''convert a training sample into a serializeable tf.Example.
@@ -158,7 +157,8 @@ class ImageToClassRecordParser(RecordParserBase):
 
         # Fixed shape appears to be necessary for training with keras.
         if self.fixed_ndim is not None:
-            shape = tf.ensure_shape(sample[self.shape_key], (self.fixed_ndim, ))
+            shape = tf.ensure_shape(sample[self.shape_key],
+                                    (self.fixed_ndim, ))
         else:
             shape = sample[self.shape_key]
 
@@ -259,10 +259,11 @@ class ImageToSegmentationRecordParser(RecordParserBase):
         sample = tf.io.parse_single_example(example, features)
 
         # Fixed shape appears to be necessary for training with keras.
-        shapes = {}
-        for key in [self.img_shape_key, self.segm_shape_key]:
-            if self.fixed_ndim is not None:
-                shapes[key] = tf.ensure_shape(sample[key], (self.fixed_ndim, ))
+        shapes = {
+            key: tf.ensure_shape(sample[key], (self.fixed_ndim, ))
+            if self.fixed_ndim is not None else sample[key]
+            for key in [self.img_shape_key, self.segm_shape_key]
+        }
 
         def _reshape_and_cast(val, shape, dtype):
             '''this ensures that tensorflow "knows" the shape of the resulting

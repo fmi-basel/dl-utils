@@ -5,6 +5,7 @@ import numpy as np
 from dlutils.dataset.tfrecords import tfrecord_from_iterable
 from dlutils.dataset.tfrecords import tfrecord_from_sample
 from dlutils.dataset.tfrecords import ImageToClassRecordParser
+from dlutils.dataset.tfrecords import ImageToSegmentationRecordParser
 
 
 def data_generator(n_samples):
@@ -61,4 +62,27 @@ def test_tfrecord_from_sample(tmpdir):
     # those from the oracle.
     for item in dataset.take(1):
         assert np.argmax(item[parser.label_key].numpy()) == sample[1]
+        assert np.all(item[parser.image_key].numpy() == sample[0])
+
+
+def test_segm_tfrecord_from_sample(tmpdir):
+    '''test the single-sample record writer.
+
+    '''
+    parser = ImageToSegmentationRecordParser(image_dtype=tf.uint8,
+                                             segm_dtype=tf.uint8)
+    output_folder = tmpdir / 'tfrec_single'
+    output_folder.mkdir()
+    output_path = str(output_folder / 'fashion_mnist.tfrec')
+
+    sample = next(data_generator(1))
+    sample = sample[0], sample[1] * np.ones_like(sample[0].shape).astype('uint8')
+    tfrecord_from_sample(output_path, sample, parser.serialize)
+
+    dataset = tf.data.TFRecordDataset(output_path).map(parser.parse)
+
+    # check if the items drawn from the tfrecord are identical to
+    # those from the oracle.
+    for item in dataset.take(1):
+        assert np.all(item[parser.segm_key].numpy() == sample[1])
         assert np.all(item[parser.image_key].numpy() == sample[0])
