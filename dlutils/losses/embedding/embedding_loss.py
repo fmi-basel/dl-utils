@@ -135,13 +135,13 @@ class InstanceEmbeddingLossBase(tf.keras.losses.Loss):
         y_true = tf.cast(y_true, tf.int32)
 
         # remove batch item that have no groundtruth at all
-        nonnegative_mask = tf.reduce_any(y_true >= 0,
-                                         axis=tuple(range(
-                                             1, len(y_true.shape))))
+        has_instance_mask = tf.reduce_any(y_true > 0,
+                                          axis=tuple(
+                                              range(1, len(y_true.shape))))
 
         def map_to_not_empty():
-            y_true_masked = tf.boolean_mask(y_true, nonnegative_mask, axis=0)
-            y_pred_masked = tf.boolean_mask(y_pred, nonnegative_mask, axis=0)
+            y_true_masked = tf.boolean_mask(y_true, has_instance_mask, axis=0)
+            y_pred_masked = tf.boolean_mask(y_pred, has_instance_mask, axis=0)
 
             loss = tf.map_fn(self._unbatched_loss,
                              [y_true_masked, y_pred_masked],
@@ -150,7 +150,7 @@ class InstanceEmbeddingLossBase(tf.keras.losses.Loss):
 
             return tf.reduce_mean(loss)
 
-        return tf.cond(tf.reduce_any(nonnegative_mask), map_to_not_empty,
+        return tf.cond(tf.reduce_any(has_instance_mask), map_to_not_empty,
                        lambda: 0.)
 
     @abc.abstractmethod
