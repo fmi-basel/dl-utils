@@ -1,7 +1,7 @@
 '''Convenience functions to get layers corresponding to the requested dimension'''
 
-from tensorflow.keras.layers import Conv3D, MaxPool3D, UpSampling3D
-from tensorflow.keras.layers import Conv2D, MaxPool2D, UpSampling2D
+from tensorflow.keras.layers import Conv3D, MaxPool3D, UpSampling3D, SpatialDropout3D
+from tensorflow.keras.layers import Conv2D, MaxPool2D, UpSampling2D, SpatialDropout2D
 from dlutils.layers.semi_conv import AdditiveSemiConv2D, AdditiveSemiConv3D
 
 
@@ -47,3 +47,14 @@ def get_nd_upsampling(ndim):
         raise ValueError(
             'upsampling {} spatial dims not supported, expected to 2 or 3'.
             format(ndim))
+
+
+def get_nd_spatial_dropout(ndim):
+    if ndim == 2:
+        return SpatialDropout2D
+    elif ndim == 3:
+        return SpatialDropout3D
+    else:
+        raise ValueError(
+            'spatial dropout {} spatial dims not supported, expected to 2 or 3'
+            .format(ndim))
