@@ -136,6 +136,40 @@ def random_gaussian_offset(offset_sigma, keys):
 # 3D version?
 
 
+def random_intensity_scaling(bounds, keys):
+    '''draws a random scaling factor between bounds from a uniform distribution.
+
+     Parameters
+    ----------
+    bounds : tuple
+        bounds of scaling factor uniform distribution
+    keys : list
+        list of keys indicating to which entries in the input_dict the
+        noise shall be added.
+
+    Returns
+    -------
+    distorter : func
+        transformation function.
+
+    '''
+    def _distorter(input_dict):
+        '''adds offset to the entries in input_dict that
+        are indexed by keys.
+
+        '''
+        output_dict = {key: val for key, val in input_dict.items()}
+        for key in keys:
+            image = output_dict[key]
+            scale = tf.random.uniform(shape=[],
+                                      minval=bounds[0],
+                                      maxval=bounds[1])
+            output_dict[key] = image * scale
+        return output_dict
+
+    return _distorter
+
+
 # from tensorflow.keras.preprocessing.image import apply_affine_transform # garbage, call scipy, no graph support, doesn't work with tf dataset
 def random_affine_transform(interp_orders,
                             angle=180,
