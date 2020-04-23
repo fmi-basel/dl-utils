@@ -1,3 +1,5 @@
+import warnings
+
 from sklearn.cluster import KMeans
 from numba import njit
 import numpy as np
@@ -149,6 +151,7 @@ def embeddings_to_labels(
     '''Converts a voting embeddings to labels.
     
     Notes:
+    embeddings obtained from semi-conv is expected to be in isotropic coords
     An instance voting score of 1.0 means that all votes fell in the same bin (i.e. same pixel/voxel)
 
     '''
@@ -158,10 +161,8 @@ def embeddings_to_labels(
 
     spacing = np.broadcast_to(np.asarray(spacing), embeddings.shape[-1])
 
-    # convert embeddings to pixel coords --> bin size = voxel
-    embeddings = embeddings / spacing
-
-    embeddings_px = np.round(embeddings).astype(np.int16)
+    # convert embeddings to pixel coords and bin --> bin size = voxel
+    embeddings_px = np.round(embeddings / spacing).astype(np.int16)
     votes = accumulate_votes(embeddings_px, fg_mask).astype(np.float32)
     seeds, seeds_intensities = local_max(votes,
                                          min_distance=peak_min_distance,
@@ -169,6 +170,8 @@ def embeddings_to_labels(
                                          spacing=spacing)
     seeds = seeds[:n_instance_max]
     seeds_intensities = seeds_intensities[:n_instance_max]
+    # convert seeds to isotropic for nearest neighbhor assignments
+    seeds = np.asarray(seeds) * spacing[None]
 
     labels = kmeans_cluster_embeddings(embeddings, seeds, mask=fg_mask)
 
@@ -191,14 +194,8 @@ def seeded_embeddings_to_labels(
         embeddings,
         fg_mask,
         seeds,
-        spacing=1.,
 ):
     '''Converts a voting embeddings to labels.'''
-
-    spacing = np.broadcast_to(np.asarray(spacing), embeddings.shape[-1])
-
-    # convert embeddings to pixel coords --> bin size = voxel
-    embeddings = embeddings / spacing
 
     labels = kmeans_cluster_embeddings(embeddings,
                                        embeddings[tuple(seeds.T)],
