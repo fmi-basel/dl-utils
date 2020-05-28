@@ -3,17 +3,20 @@ from functools import partial
 import tensorflow as tf
 from tensorflow.keras.utils import get_source_inputs
 from tensorflow.keras.layers import Input
-from tensorflow.keras.layers import BatchNormalization, LayerNormalization
 from tensorflow.keras.models import Model
 
-from tensorflow_addons.layers import GroupNormalization
+from tensorflow.keras.layers import BatchNormalization, LayerNormalization
+from tensorflow_addons.layers import GroupNormalization, InstanceNormalization
 
 from dlutils.layers.padding import DynamicPaddingLayer, DynamicTrimmingLayer
 from dlutils.layers.nd_layers import get_nd_conv
 from dlutils.layers.nd_layers import get_nd_maxpooling
 from dlutils.layers.nd_layers import get_nd_upsampling
 
+# TODO Move to nd_layers
 def get_nd_upconv(spatial_ndim):
+    '''
+    '''
     if spatial_ndim == 2:
         return tf.keras.layers.Conv2DTranspose
     if spatial_ndim == 3:
@@ -79,6 +82,8 @@ class UnetBuilder:
                 name += '-LN'
             elif self.norm_layer == GroupNormalization:
                 name += '-GN'
+            elif self.norm_layer == InstanceNormalization:
+                name += '-IN'
         return name
 
     def add_single_block(self, input_tensor, filters, **kwargs):
@@ -148,6 +153,7 @@ def GenericUnetBase(input_shape=None,
                     input_tensor=None,
                     batch_size=None,
                     with_bn=False,
+                    with_ln=False,
                     width=1,
                     n_levels=5,
                     n_blocks=2,
@@ -171,11 +177,19 @@ def GenericUnetBase(input_shape=None,
     # dont count batch and channel dimension.
     spatial_ndim = len(img_input.shape) - 2
 
+    # determine normalization
+    if with_bn:
+        norm_layer = BatchNormalization
+    elif with_ln:
+        norm_layer = LayerNormalization
+    else:
+        norm_layer = None
+
     builder = UnetBuilder(
         conv_layer=get_nd_conv(spatial_ndim),
         downsampling_layer=get_nd_maxpooling(spatial_ndim),
         upsampling_layer=get_nd_upsampling(spatial_ndim),
-        norm_layer=BatchNormalization if with_bn else None,
+        norm_layer=norm_layer,
         n_levels=n_levels,
         n_blocks=n_blocks,
         base_features=int(width * ORIGINAL_FEATURES))
@@ -191,7 +205,7 @@ def GenericUnetBase(input_shape=None,
         x = get_nd_conv(spatial_ndim)(filters=builder.base_features,
                                       strides=downsampling,
                                       kernel_size=downsampling,
-                                      padding='same',activation='linear')(x)
+                                      padding='same', activation='linear')(x)
         # construct unet.
         x = builder.build_unet_block(x)
 
