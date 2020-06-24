@@ -2,6 +2,7 @@ from setuptools import setup, find_packages
 
 contrib = [
     'Markus Rempfler',
+    'Raphael Ortiz',
 ]
 
 # setup.
