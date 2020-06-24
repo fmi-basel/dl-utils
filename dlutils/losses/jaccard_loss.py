@@ -1,7 +1,5 @@
 import tensorflow as tf
 
-# TODO rewrite using mask to flatten spatial dims flat (keepdims, check lovasz))
-
 
 class JaccardLoss(tf.keras.losses.Loss):
     '''
@@ -110,6 +108,7 @@ class BinaryJaccardLoss(JaccardLoss):
         y_true, y_pred = super()._remove_unannot(y_true, y_pred)
 
         if not self.symmetric:
+            # remove reciprocal, AFTER computing unannot mask
             y_true = y_true[..., -1:]
             y_pred = y_pred[..., -1:]
 
