@@ -3,7 +3,7 @@ import tensorflow as tf
 import numpy as np
 
 from scipy.ndimage.measurements import mean as label_mean
-from dlutils.losses.embedding.embedding_loss import _unbatched_soft_jaccard, _unbatched_label_to_hot, _unbatched_embedding_center, _unbatched_embeddings_to_prob, InstanceEmbeddingLossBase, InstanceMeanIoUEmbeddingLoss
+from dlutils.losses.embedding.embedding_loss import _unbatched_soft_jaccard, _unbatched_label_to_hot, _unbatched_embedding_center, _unbatched_embeddings_to_prob, InstanceEmbeddingLossBase, InstanceMeanIoUEmbeddingLoss, MarginInstanceEmbeddingLoss
 
 
 def test__unbatched_soft_jaccard():
@@ -186,3 +186,52 @@ def test_InstanceMeanIoUEmbeddingLoss():
     assert loss_perfect < loss_clipped
     assert loss_perfect < loss_marginA
     assert loss_marginA < loss_marginB
+
+
+@pytest.mark.parametrize(
+    "intra_margin,inter_margin",
+    [(3, 10), (1, 2), (0.1, 5.)],
+)
+def test_MarginInstanceEmbeddingLoss(intra_margin, inter_margin):
+
+    margin_loss = MarginInstanceEmbeddingLoss(intra_margin, inter_margin)
+
+    # random labels, 5 classes, batch size = 4
+    np.random.seed(11)
+    yt = np.random.choice(range(5), size=(4, 10, 10, 1)).astype(np.int32)
+    # perfect embedding of size 10, more than inter_margin appart from each other
+    yp_prefect = np.tile(yt, (1, 1, 1, 10)) * 1.1 * inter_margin
+    yp_prefect = yp_prefect.astype(np.float32)
+    loss_perfect = margin_loss(yt, yp_prefect)
+    np.testing.assert_almost_equal(loss_perfect, 0.)
+
+    # batch 1, 1d sample with 2 elements, single instance and embeddign of size 1
+    yt = np.ones((1, 2, 1), dtype=np.int32)
+    yp = np.array([[[1], [1]]], dtype=np.float32)
+    np.testing.assert_almost_equal(margin_loss(yt, yp), 0.)
+
+    yp = np.array([[[1], [1 + intra_margin]]], dtype=np.float32)
+    np.testing.assert_almost_equal(margin_loss(yt, yp), 0.)
+
+    yp = np.array([[[1], [1 + 2 * intra_margin]]], dtype=np.float32)
+    np.testing.assert_almost_equal(margin_loss(yt, yp), 0.)
+
+    yp = np.array([[[1], [1 + 2.1 * intra_margin]]], dtype=np.float32)
+    assert margin_loss(yt, yp) > 0
+
+    yp = np.array([[[1], [1 + 10 * intra_margin]]], dtype=np.float32)
+    assert margin_loss(yt, yp) > 0
+
+    # batch 1, 1d sample with 2 elements, 2 instances and embeddign of size 1
+    yt = np.array([[[1], [2]]], dtype=np.int32)
+    yp = np.array([[[1], [1]]], dtype=np.float32)
+    assert margin_loss(yt, yp) > 0.
+
+    yp = np.array([[[1], [1 + 0.5 * inter_margin]]], dtype=np.float32)
+    assert margin_loss(yt, yp) > 0
+
+    yp = np.array([[[1], [1 + 1. * inter_margin]]], dtype=np.float32)
+    np.testing.assert_almost_equal(margin_loss(yt, yp), 0.)
+
+    yp = np.array([[[1], [1 + 2. * inter_margin]]], dtype=np.float32)
+    np.testing.assert_almost_equal(margin_loss(yt, yp), 0.)

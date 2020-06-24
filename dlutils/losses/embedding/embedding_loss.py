@@ -66,6 +66,19 @@ def _unbatched_embedding_center(hot, y_pred):
     return centers
 
 
+def _unbatched_embeddings_to_center_dist(embeddings, centers):
+    '''Returns a embedding distance map per center'''
+
+    # add 1hot dimension to embeddings
+    embeddings = tf.expand_dims(embeddings, -2)
+
+    # add spatial dimensions to centers if necessary
+    while (len(centers.shape) < len(embeddings.shape)):
+        centers = tf.expand_dims(centers, 0)
+
+    return tf.norm(centers - embeddings, axis=-1)
+
+
 def _unbatched_embeddings_to_prob(embeddings, centers, margin,
                                   clip_probs=None):
     '''
@@ -106,14 +119,7 @@ def _unbatched_embeddings_to_prob(embeddings, centers, margin,
                 'clip_probs should be None or (low,high) tuple: . got {}'.
                 format(clip_probs))
 
-    # add 1hot dimension to embeddings
-    embeddings = tf.expand_dims(embeddings, -2)
-
-    # add spatial dimensions to centers if necessary
-    while (len(centers.shape) < len(embeddings.shape)):
-        centers = tf.expand_dims(centers, 0)
-
-    center_dist = tf.norm(centers - embeddings, axis=-1)
+    center_dist = _unbatched_embeddings_to_center_dist(embeddings, centers)
 
     # convert distance from center to probability of belonging to the instance
     return calc_probs(center_dist)
@@ -162,6 +168,11 @@ class InstanceEmbeddingLossBase(tf.keras.losses.Loss):
 
 class InstanceMeanIoUEmbeddingLoss(InstanceEmbeddingLossBase):
     '''
+    
+    Neven, D., Brabandere, B.D., Proesmans, M. and Gool, L.V., 2019. 
+    Instance segmentation by jointly optimizing spatial embeddings and 
+    clustering bandwidth. In Proceedings of the IEEE Conference on 
+    Computer Vision and Pattern Recognition (pp. 8837-8845).
     '''
     def __init__(self, margin, clip_probs=None, *args, **kwargs):
         '''
@@ -185,5 +196,64 @@ class InstanceMeanIoUEmbeddingLoss(InstanceEmbeddingLossBase):
         centers = _unbatched_embedding_center(one_hot, y_pred)
         probs = _unbatched_embeddings_to_prob(y_pred, centers, self.margin,
                                               self.clip_probs)
+
+        return tf.reduce_mean(_unbatched_soft_jaccard(one_hot, probs))
+
+
+class MarginInstanceEmbeddingLoss(InstanceEmbeddingLossBase):
+    '''Same as InstanceMeanIoUEmbeddingLoss except embeddings are 
+    converted to a probability map with intra/inter margins "hinges" 
+    instead of a gaussian kernel.
+    
+    Similar to:
+    De Brabandere, B., Neven, D. and Van Gool, L., 2017. Semantic 
+    instance segmentation with a discriminative loss function. arXiv 
+    preprint arXiv:1708.02551.
+    
+    '''
+    def __init__(self, intra_margin, inter_margin, *args, **kwargs):
+        '''
+        
+        Args:
+            intra_margin: distance from an embedding to its center below which the loss is zero
+            inter_margin: distance from an embedding to other centers above which the loss is zero
+        '''
+        super().__init__(*args, **kwargs)
+
+        self.intra_margin = intra_margin
+        self.inter_margin = inter_margin
+
+        assert self.intra_margin > 0.
+        assert self.inter_margin > self.intra_margin
+
+    def _hingify(self, y_true, y_pred):
+        '''Replaces pixel probs over hinge threshold by groundtruth value'''
+
+        y_pred = tf.where(~tf.cast(y_true, tf.bool) & (y_pred < 0), 0., y_pred)
+        y_pred = tf.where(
+            tf.cast(y_true, tf.bool) & (y_pred > 1.0), 1., y_pred)
+
+        return y_true, y_pred
+
+    def _rescale_distance(self, center_dist):
+        '''Applies f(d) linear transform to distance d so that f(intra_margin)==1 and f(inter_margin)==0'''
+
+        a = 1 / (self.intra_margin - self.inter_margin)
+        b = self.inter_margin / (self.inter_margin - self.intra_margin)
+
+        return a * center_dist + b
+
+    def _unbatched_loss(self, packed):
+        '''
+        '''
+
+        y_true, y_pred = packed
+
+        one_hot = _unbatched_label_to_hot(y_true)
+        centers = _unbatched_embedding_center(one_hot, y_pred)
+
+        center_dist = _unbatched_embeddings_to_center_dist(y_pred, centers)
+        rescaled_center_dist = self._rescale_distance(center_dist)
+        probs = self._hingify(one_hot, rescaled_center_dist)
 
         return tf.reduce_mean(_unbatched_soft_jaccard(one_hot, probs))
