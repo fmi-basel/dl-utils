@@ -1,5 +1,7 @@
 import tensorflow as tf
 
+# TODO rewrite using mask to flatten spatial dims flat (keepdims, check lovasz))
+
 
 class JaccardLoss(tf.keras.losses.Loss):
     '''
@@ -11,14 +13,11 @@ class JaccardLoss(tf.keras.losses.Loss):
     
     Args:
     eps: epsilon to avoid divison by zero.
-    hinge_probs: None or tuple(low, high) Tresholds over which pixels in prediction
-        are replaced by the groundtruth (i.e. no backpropagation)
     '''
-    def __init__(self, eps=1e-6, hinge_probs=None, *args, **kwargs):
+    def __init__(self, eps=1e-6, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
         self.eps = eps
-        self.hinge_probs = hinge_probs
 
     def _remove_unannot(self, y_true, y_pred):
         annot_mask = tf.cast(
@@ -38,15 +37,6 @@ class JaccardLoss(tf.keras.losses.Loss):
 
         y_true, y_pred = self._remove_unannot(y_true, y_pred)
 
-        if self.hinge_probs is not None:
-            # replace px over hinge threshold by groundtruth value
-            y_pred = tf.where(
-                ~tf.cast(y_true, tf.bool) & (y_pred < self.hinge_probs[0]), 0.,
-                y_pred)
-            y_pred = tf.where(
-                tf.cast(y_true, tf.bool) & (y_pred > self.hinge_probs[1]), 1.,
-                y_pred)
-
         spatial_axis = tuple(range(1, len(y_true.shape) - 1))
 
         intersection = tf.reduce_sum(y_pred * y_true, axis=spatial_axis)
@@ -57,16 +47,80 @@ class JaccardLoss(tf.keras.losses.Loss):
         return tf.math.reduce_mean(jaccard)
 
 
+class HingedJaccardLoss(JaccardLoss):
+    '''Similar to JaccardLoss, but with unbounded predictions
+    
+    hinge_thresh: Threshold over which pixels in prediction
+        are replaced by the groundtruth (i.e. no backpropagation)
+    '''
+    def __init__(self, hinge_thresh=0.25, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        if hinge_thresh < 0.:
+            raise ValueError('hinge_thresh {}<0.'.format(hinge_thresh))
+
+        if hinge_thresh >= 0.5:
+            raise ValueError('hinge_thresh {}>=0.5'.format(hinge_thresh))
+
+        self.hinge_low = hinge_thresh
+        self.hinge_high = 1. - hinge_thresh
+
+    def _hingify(self, y_true, y_pred):
+        '''Replaces pixel probs over hinge threshold by groundtruth value'''
+
+        y_pred = tf.where(
+            ~tf.cast(y_true, tf.bool) & (y_pred < self.hinge_low), 0., y_pred)
+        y_pred = tf.where(
+            tf.cast(y_true, tf.bool) & (y_pred > self.hinge_high), 1., y_pred)
+
+        return y_true, y_pred
+
+    def call(self, y_true, y_pred):
+
+        y_true, y_pred = self._hingify(y_true, y_pred)
+
+        return super().call(y_true, y_pred)
+
+
 class BinaryJaccardLoss(JaccardLoss):
     '''
     Single class variant of JaccardLoss.
     
-    if y_true has 2 channels, the second channel is considered as annotation mask
+    Expects integer labels instead of one hot. Negative values in y_true are excluded.
+    
+    Args:
+    symmetric: if true returns the mean of losses over target class and its inverse 
     '''
-    def _remove_unannot(self, y_true, y_pred):
+    def __init__(self, symmetric=False, *args, **kwargs):
+        super().__init__(*args, **kwargs)
 
-        annot_mask = y_true >= 0
-        y_true = tf.clip_by_value(y_true, 0., 1.)
-        y_pred = y_pred * tf.cast(annot_mask, tf.float32)
+        self.symmetric = symmetric
+
+    def _annot_to_hot(self, y_true, y_pred):
+
+        y_true = tf.minimum(y_true, 1)
+        y_true = tf.cast(tf.one_hot(tf.squeeze(y_true, -1), depth=2),
+                         tf.float32)
+        y_pred = tf.concat([1. - y_pred, y_pred], axis=-1)
 
         return y_true, y_pred
+
+    def _remove_unannot(self, y_true, y_pred):
+
+        y_true, y_pred = super()._remove_unannot(y_true, y_pred)
+
+        if not self.symmetric:
+            y_true = y_true[..., -1:]
+            y_pred = y_pred[..., -1:]
+
+        return y_true, y_pred
+
+    def call(self, y_true, y_pred):
+
+        y_true, y_pred = self._annot_to_hot(y_true, y_pred)
+
+        return super().call(y_true, y_pred)
+
+
+class HingedBinaryJaccardLoss(BinaryJaccardLoss, HingedJaccardLoss):
+    pass
