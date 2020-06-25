@@ -132,7 +132,7 @@ def test_InstanceEmbeddingLossBase():
             return tf.math.reduce_mean(tf.abs(y_true - y_pred))
 
     yt = np.broadcast_to(
-        np.arange(10, dtype=np.float32)[:, None, None, None],
+        np.arange(1, 11, dtype=np.float32)[:, None, None, None],
         (10, 10, 10, 1)).copy()
     yp = (yt + 1).astype(np.float32)
 
@@ -140,8 +140,8 @@ def test_InstanceEmbeddingLossBase():
     np.testing.assert_almost_equal(loss, 1.)
 
     # perfect prediction for samples 0 and 5
-    yp[0] = 0
-    yp[5] = 5
+    yp[0] = 1
+    yp[5] = 6
     loss = InstanceMeanIoUEmbeddingLoss()(yt, yp)
     np.testing.assert_almost_equal(loss, 0.8)
 
@@ -153,6 +153,11 @@ def test_InstanceEmbeddingLossBase():
 
     # unlabel all
     yt[:] = -1
+    loss = InstanceMeanIoUEmbeddingLoss()(yt, yp)
+    np.testing.assert_almost_equal(loss, 0.)
+
+    # background should be excluded
+    yt[:] = 0
     loss = InstanceMeanIoUEmbeddingLoss()(yt, yp)
     np.testing.assert_almost_equal(loss, 0.)
 
