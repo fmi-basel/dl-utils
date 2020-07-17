@@ -224,7 +224,7 @@ def test_JaccardLoss_training():
 
 
 def test_BinaryJaccardLoss_training():
-    '''Verifies that the JaccardLoss can be used to learn a simple thresholding operation.'''
+    '''Verifies that the BinaryJaccardLoss can be used to learn a simple thresholding operation.'''
 
     np.random.seed(25)
     raw = np.random.normal(size=(1, 10, 10, 1)).astype(np.float32)
