@@ -28,7 +28,7 @@ def _unbatched_soft_jaccard(y_true, y_pred, fg_only=True, eps=1e-6):
 
 def _unbatched_label_to_hot(instance_labels):
     '''
-    Generates 1-hot encoding of instance labels and remove labels that don't exist.
+    Generates 1-hot encoding of instance labels.
     
     Notes:
     ignores negative labels and background=0
@@ -41,12 +41,6 @@ def _unbatched_label_to_hot(instance_labels):
     n_classes = tf.maximum(0, tf.reduce_max(instance_labels)) + 1
 
     hot = tf.one_hot(tf.squeeze(instance_labels, -1), n_classes)
-
-    # remove missing labels
-    nonzero_mask = tf.reduce_any(hot >= 1, axis=spatial_axis)
-    hot = tf.boolean_mask(hot,
-                          nonzero_mask,
-                          axis=len(instance_labels.shape) - 1)
 
     return hot
 
@@ -125,6 +119,15 @@ def _unbatched_embeddings_to_prob(embeddings, centers, margin,
     return calc_probs(center_dist)
 
 
+def relabel_sequential(labels):
+    '''Relabel positive (foreground) labels sequentially'''
+    fg_mask = labels > 0
+    _, seq_labels = tf.unique(tf.boolean_mask(labels, fg_mask))
+
+    return tf.tensor_scatter_nd_update(labels, tf.where(fg_mask),
+                                       seq_labels + 1)
+
+
 class InstanceEmbeddingLossBase(tf.keras.losses.Loss):
     '''Base class for embedding losses.
 
@@ -191,6 +194,7 @@ class InstanceMeanIoUEmbeddingLoss(InstanceEmbeddingLossBase):
         '''
 
         y_true, y_pred = packed
+        y_true = relabel_sequential(y_true)  # on random patch level
 
         one_hot = _unbatched_label_to_hot(y_true)
         centers = _unbatched_embedding_center(one_hot, y_pred)
@@ -226,14 +230,17 @@ class MarginInstanceEmbeddingLoss(InstanceEmbeddingLossBase):
         assert self.intra_margin > 0.
         assert self.inter_margin > self.intra_margin
 
-    def _hingify(self, y_true, y_pred):
+    def _hingify(self, y_true, rescaled_center_dist):
         '''Replaces pixel probs over hinge threshold by groundtruth value'''
 
-        y_pred = tf.where(~tf.cast(y_true, tf.bool) & (y_pred < 0), 0., y_pred)
-        y_pred = tf.where(
-            tf.cast(y_true, tf.bool) & (y_pred > 1.0), 1., y_pred)
+        rescaled_center_dist = tf.where(
+            ~tf.cast(y_true, tf.bool) & (rescaled_center_dist < 0), 0.,
+            rescaled_center_dist)
+        rescaled_center_dist = tf.where(
+            tf.cast(y_true, tf.bool) & (rescaled_center_dist > 1.0), 1.,
+            rescaled_center_dist)
 
-        return y_true, y_pred
+        return rescaled_center_dist
 
     def _rescale_distance(self, center_dist):
         '''Applies f(d) linear transform to distance d so that f(intra_margin)==1 and f(inter_margin)==0'''
@@ -248,6 +255,7 @@ class MarginInstanceEmbeddingLoss(InstanceEmbeddingLossBase):
         '''
 
         y_true, y_pred = packed
+        y_true = relabel_sequential(y_true)  # on random patch level
 
         one_hot = _unbatched_label_to_hot(y_true)
         centers = _unbatched_embedding_center(one_hot, y_pred)
@@ -256,4 +264,4 @@ class MarginInstanceEmbeddingLoss(InstanceEmbeddingLossBase):
         rescaled_center_dist = self._rescale_distance(center_dist)
         probs = self._hingify(one_hot, rescaled_center_dist)
 
-        return tf.reduce_mean(_unbatched_soft_jaccard(one_hot, probs))
+        return tf.reduce_mean(_unbatched_soft_jaccard(one_hot, probs, eps=1))

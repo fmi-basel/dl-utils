@@ -3,7 +3,8 @@ import tensorflow as tf
 import numpy as np
 
 from scipy.ndimage.measurements import mean as label_mean
-from dlutils.losses.embedding.embedding_loss import _unbatched_soft_jaccard, _unbatched_label_to_hot, _unbatched_embedding_center, _unbatched_embeddings_to_prob, InstanceEmbeddingLossBase, InstanceMeanIoUEmbeddingLoss, MarginInstanceEmbeddingLoss
+from skimage.segmentation import relabel_sequential as sk_relabel_sequential
+from dlutils.losses.embedding.embedding_loss import _unbatched_soft_jaccard, _unbatched_label_to_hot, _unbatched_embedding_center, _unbatched_embeddings_to_prob, InstanceEmbeddingLossBase, InstanceMeanIoUEmbeddingLoss, MarginInstanceEmbeddingLoss, relabel_sequential
 
 
 def test__unbatched_soft_jaccard():
@@ -51,19 +52,38 @@ def test__unbatched_label_to_hot():
 
     np.random.seed(25)
     labels = np.random.choice(range(5), size=(10, 10, 1)).astype(np.int32)
-    #remove label id 3
-    labels[labels == 3] = 0
 
     hot_labels = _unbatched_label_to_hot(labels)
 
-    # #channels == #unique labels - bg and label 3
-    assert hot_labels.shape == (10, 10, 3)
+    # #channels == #unique labels - bg
+    assert hot_labels.shape == (10, 10, 4)
 
-    for idx, l in enumerate([1, 2, 4]):
+    for idx, l in enumerate([1, 2, 3, 4]):
         hot_slice = hot_labels[..., idx].numpy().astype(bool)
         l_mask = labels.squeeze() == l
 
         np.testing.assert_array_equal(hot_slice, l_mask)
+
+
+def test_relabel_sequential():
+
+    np.random.seed(25)
+    labels = np.random.choice([-1, 0, 2, 3, 4, 5],
+                              size=(10, 10, 1)).astype(np.int32)
+
+    # already sequential labels
+    sk_sequential_labels = sk_relabel_sequential(labels + 1)[0] - 1
+    tf_sequential_labels = relabel_sequential(labels)
+    assert set(np.unique(sk_sequential_labels)) == set(
+        np.unique(tf_sequential_labels))
+
+    # non sequential labels
+    labels[labels == 2] = 0
+    labels[labels == 4] = -1
+    sk_sequential_labels = sk_relabel_sequential(labels + 1)[0] - 1
+    tf_sequential_labels = relabel_sequential(labels)
+    assert set(np.unique(sk_sequential_labels)) == set(
+        np.unique(tf_sequential_labels))
 
 
 def test__unbatched_embedding_center():
