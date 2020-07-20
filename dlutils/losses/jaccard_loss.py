@@ -96,6 +96,7 @@ class BinaryJaccardLoss(JaccardLoss):
 
     def _annot_to_hot(self, y_true, y_pred):
 
+        y_true = tf.cast(y_true, tf.int32)
         y_true = tf.minimum(y_true, 1)
         y_true = tf.cast(tf.one_hot(tf.squeeze(y_true, -1), depth=2),
                          tf.float32)

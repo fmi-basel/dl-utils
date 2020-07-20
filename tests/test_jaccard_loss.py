@@ -221,3 +221,28 @@ def test_JaccardLoss_training():
 
     assert loss_before * 0.95 >= loss_after
     assert loss_after < 0.001
+
+
+def test_BinaryJaccardLoss_training():
+    '''Verifies that the BinaryJaccardLoss can be used to learn a simple thresholding operation.'''
+
+    np.random.seed(25)
+    raw = np.random.normal(size=(1, 10, 10, 1)).astype(np.float32)
+    yt = (raw > 0.0).astype(np.float32)
+    dataset = tf.data.Dataset.from_tensors((raw, yt))
+
+    model = tf.keras.models.Sequential([
+        tf.keras.layers.Conv2D(1,
+                               kernel_size=1,
+                               padding='same',
+                               activation='sigmoid'),
+    ])
+    model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=10.),
+                  loss=BinaryJaccardLoss())
+
+    loss_before = model.evaluate(dataset)
+    model.fit(dataset, epochs=100)
+    loss_after = model.evaluate(dataset)
+
+    assert loss_before * 0.95 >= loss_after
+    assert loss_after < 0.001
