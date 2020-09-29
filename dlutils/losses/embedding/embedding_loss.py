@@ -2,6 +2,8 @@ import abc
 import numpy as np
 import tensorflow as tf
 
+from dlutils.losses.utils import hingify
+
 
 def _unbatched_soft_jaccard(y_true, y_pred, fg_only=True, eps=1e-6):
     '''expects y_true as one-hot and y_pred as probabilities between [0, 1]
@@ -230,18 +232,6 @@ class MarginInstanceEmbeddingLoss(InstanceEmbeddingLossBase):
         assert self.intra_margin > 0.
         assert self.inter_margin > self.intra_margin
 
-    def _hingify(self, y_true, rescaled_center_dist):
-        '''Replaces pixel probs over hinge threshold by groundtruth value'''
-
-        rescaled_center_dist = tf.where(
-            ~tf.cast(y_true, tf.bool) & (rescaled_center_dist < 0), 0.,
-            rescaled_center_dist)
-        rescaled_center_dist = tf.where(
-            tf.cast(y_true, tf.bool) & (rescaled_center_dist > 1.0), 1.,
-            rescaled_center_dist)
-
-        return rescaled_center_dist
-
     def _rescale_distance(self, center_dist):
         '''Applies f(d) linear transform to distance d so that f(intra_margin)==1 and f(inter_margin)==0'''
 
@@ -262,6 +252,7 @@ class MarginInstanceEmbeddingLoss(InstanceEmbeddingLossBase):
 
         center_dist = _unbatched_embeddings_to_center_dist(y_pred, centers)
         rescaled_center_dist = self._rescale_distance(center_dist)
-        probs = self._hingify(one_hot, rescaled_center_dist)
+
+        probs = hingify(one_hot, rescaled_center_dist)
 
         return tf.reduce_mean(_unbatched_soft_jaccard(one_hot, probs, eps=1))
