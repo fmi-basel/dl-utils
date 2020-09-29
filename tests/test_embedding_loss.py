@@ -4,13 +4,21 @@ import numpy as np
 
 from scipy.ndimage.measurements import mean as label_mean
 from skimage.segmentation import relabel_sequential as sk_relabel_sequential
-from dlutils.losses.embedding.embedding_loss import _unbatched_soft_jaccard, _unbatched_label_to_hot, _unbatched_embedding_center, _unbatched_embeddings_to_prob, InstanceEmbeddingLossBase, InstanceMeanIoUEmbeddingLoss, MarginInstanceEmbeddingLoss, relabel_sequential
+from dlutils.losses.embedding.embedding_loss import InstanceEmbeddingLossBase, SpatialInstanceEmbeddingLossBase, InstanceMeanIoUEmbeddingLoss, MarginInstanceEmbeddingLoss, relabel_sequential
+
+
+class DummySpatialInstanceEmbeddingLoss(SpatialInstanceEmbeddingLossBase):
+    def _center_dist_to_probs(self, one_hot, center_dist):
+        pass
 
 
 def test__unbatched_soft_jaccard():
     '''Verifies that the soft Jaccard loss behaves as keras MeanIoU when 
     probabilities are either 0 or 1 and that background masking works
     '''
+
+    _unbatched_soft_jaccard = DummySpatialInstanceEmbeddingLoss(
+    )._unbatched_soft_jaccard
 
     np.random.seed(25)
     n_classes = 5
@@ -50,6 +58,9 @@ def test__unbatched_soft_jaccard():
 
 def test__unbatched_label_to_hot():
 
+    _unbatched_label_to_hot = DummySpatialInstanceEmbeddingLoss(
+    )._unbatched_label_to_hot
+
     np.random.seed(25)
     labels = np.random.choice(range(5), size=(10, 10, 1)).astype(np.int32)
 
@@ -88,6 +99,11 @@ def test_relabel_sequential():
 
 def test__unbatched_embedding_center():
 
+    _unbatched_label_to_hot = DummySpatialInstanceEmbeddingLoss(
+    )._unbatched_label_to_hot
+    _unbatched_embedding_center = DummySpatialInstanceEmbeddingLoss(
+    )._unbatched_embedding_center
+
     np.random.seed(25)
     labels = np.random.choice(range(5), size=(10, 10, 1)).astype(np.int32)
     hot_labels = _unbatched_label_to_hot(labels)
@@ -104,42 +120,6 @@ def test__unbatched_embedding_center():
                                 axis=-1)
     np.testing.assert_array_almost_equal(centers.numpy().squeeze(),
                                          expected_centers)
-
-
-def test__unbatched_embeddings_to_prob():
-    '''check that perfect embeddings/centers fall back on one hot encoded labels'''
-
-    np.random.seed(25)
-    labels = np.random.choice(range(5), size=(10, 10, 1)).astype(np.int32)
-    centers = np.array([[1], [2], [3], [4]], dtype=np.float32)
-
-    probs = _unbatched_embeddings_to_prob(labels.astype(np.float32),
-                                          centers,
-                                          margin=0.5,
-                                          clip_probs=None)
-
-    for idx in range(4):
-        prob_slice_thresh = probs[..., idx].numpy() > 0.5
-        l_mask = labels.squeeze() == idx + 1
-
-        np.testing.assert_array_equal(prob_slice_thresh, l_mask)
-
-
-def test__unbatched_embeddings_to_prob_1D():
-    '''checks prob/margin relationship in 1D case'''
-
-    yp = np.arange(100, dtype=np.float32)[..., None]
-    centers = np.array([[0]], dtype=np.float32)
-
-    for margin in range(1, 20):
-        probs = _unbatched_embeddings_to_prob(yp,
-                                              centers,
-                                              margin=margin,
-                                              clip_probs=None)
-        first_negative = np.argwhere((probs.numpy() < 0.5).squeeze())[0, 0]
-
-        # check that first prob<0.5 is ~ margin away from center
-        assert first_negative == margin + 1 or first_negative == margin
 
 
 def test_InstanceEmbeddingLossBase():
@@ -206,6 +186,23 @@ def test_InstanceMeanIoUEmbeddingLoss():
     assert loss_perfect < loss_clipped
     assert loss_perfect < loss_marginA
     assert loss_marginA < loss_marginB
+
+
+def test__InstanceMeanIoUEmbeddingLoss_margin():
+    '''Checks that first prob<0.5 is ~ margin away from center in 1D case'''
+
+    yp = np.arange(100, dtype=np.float32)[..., None]
+    centers = np.array([[0]], dtype=np.float32)
+
+    for margin in range(1, 20):
+        loss_cls = InstanceMeanIoUEmbeddingLoss(margin=margin)
+
+        center_dist = loss_cls._unbatched_embeddings_to_center_dist(
+            yp, centers)
+        probs = loss_cls._center_dist_to_probs(None, center_dist)
+        first_negative = np.argwhere((probs.numpy() < 0.5).squeeze())[0, 0]
+
+        assert first_negative == margin + 1 or first_negative == margin
 
 
 @pytest.mark.parametrize(
