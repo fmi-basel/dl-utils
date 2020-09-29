@@ -57,25 +57,27 @@ class InstanceEmbeddingLossBase(tf.keras.losses.Loss):
 
 class SpatialInstanceEmbeddingLossBase(InstanceEmbeddingLossBase):
     '''Base class for losses converting embeddigns to distance to instance center'''
-    def _unbatched_soft_jaccard(self, y_true, y_pred, fg_only=True, eps=1e-6):
+    def __init__(self, eps=1e-6, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        self.eps = eps
+
+    def _unbatched_soft_jaccard(self, y_true, y_pred):
         '''expects y_true as one-hot and y_pred as probabilities between [0, 1]
     
         '''
         spatial_axis = tuple(range(len(y_true.shape) - 1))
         intersection = tf.reduce_sum(y_pred * y_true, axis=spatial_axis)
 
-        if fg_only:
-            fg_mask = tf.cast(
-                tf.reduce_any(tf.greater_equal(y_true, 0.5),
-                              axis=-1,
-                              keepdims=True), tf.float32)
-            union = tf.reduce_sum(fg_mask * (y_pred + y_true),
-                                  axis=spatial_axis) - intersection
-        else:
-            union = tf.reduce_sum(
-                (y_pred + y_true), axis=spatial_axis) - intersection
+        # apply to foreground only
+        fg_mask = tf.cast(
+            tf.reduce_any(tf.greater_equal(y_true, 0.5),
+                          axis=-1,
+                          keepdims=True), tf.float32)
+        union = tf.reduce_sum(fg_mask * (y_pred + y_true),
+                              axis=spatial_axis) - intersection
 
-        jaccard = 1 - (intersection + eps) / (union + eps)
+        jaccard = 1 - (intersection + self.eps) / (union + self.eps)
 
         return jaccard
 
@@ -98,7 +100,7 @@ class SpatialInstanceEmbeddingLossBase(InstanceEmbeddingLossBase):
         return hot
 
     def _unbatched_embedding_center(self, hot, y_pred):
-        '''Returns the mean of  each embedding under the true instance mask'''
+        '''Returns the mean of each embedding under the true instance mask'''
 
         spatial_axis = tuple(range(len(hot.shape) - 1))
 
@@ -116,10 +118,6 @@ class SpatialInstanceEmbeddingLossBase(InstanceEmbeddingLossBase):
 
         # add 1hot dimension to embeddings
         embeddings = tf.expand_dims(embeddings, -2)
-
-        # add spatial dimensions to centers if necessary
-        while (len(centers.shape) < len(embeddings.shape)):
-            centers = tf.expand_dims(centers, 0)
 
         return tf.norm(centers - embeddings, axis=-1)
 
@@ -141,8 +139,7 @@ class SpatialInstanceEmbeddingLossBase(InstanceEmbeddingLossBase):
 
         probs = self._center_dist_to_probs(one_hot, center_dist)
 
-        return tf.reduce_mean(
-            self._unbatched_soft_jaccard(one_hot, probs, eps=1))
+        return tf.reduce_mean(self._unbatched_soft_jaccard(one_hot, probs))
 
 
 class InstanceMeanIoUEmbeddingLoss(SpatialInstanceEmbeddingLossBase):
