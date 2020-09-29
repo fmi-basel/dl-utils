@@ -20,40 +20,16 @@ def test__unbatched_soft_jaccard():
     _unbatched_soft_jaccard = DummySpatialInstanceEmbeddingLoss(
     )._unbatched_soft_jaccard
 
-    np.random.seed(25)
-    n_classes = 5
-
-    # random labels, 5 classes, batch size = 4
-    yt = np.random.choice(range(n_classes), size=(10, 10, 1))
-    yp = np.random.choice(range(n_classes), size=(10, 10, 1))
-
-    m = tf.keras.metrics.MeanIoU(num_classes=n_classes)
-    m.update_state(yt, tf.cast(yp, tf.int32))
-    expected_loss = 1. - m.result().numpy()
-
-    one_hot = tf.cast(tf.one_hot(tf.squeeze(yt, -1), n_classes), tf.float32)
-    probs = tf.cast(tf.one_hot(tf.squeeze(yp, -1), n_classes), tf.float32)
-    loss = _unbatched_soft_jaccard(one_hot, probs, fg_only=False,
-                                   eps=1e-6).numpy().mean()
-
-    np.testing.assert_almost_equal(loss, expected_loss, decimal=3)
-
     # check with/without background on simple example
     yt = np.array([0, 0, 1, 1, 2, 2])[..., None]
     yp = np.array([0, 1, 0, 1, 2, 2])[..., None]
 
     one_hot = tf.cast(tf.one_hot(tf.squeeze(yt, -1), 3), tf.float32)
     probs = tf.cast(tf.one_hot(tf.squeeze(yp, -1), 3), tf.float32)
+    loss = _unbatched_soft_jaccard(one_hot[..., 1:],
+                                   probs[..., 1:]).numpy().mean()
 
-    loss = _unbatched_soft_jaccard(one_hot, probs,
-                                   fg_only=False).numpy().mean()
-    loss_fg = _unbatched_soft_jaccard(one_hot[..., 1:],
-                                      probs[..., 1:],
-                                      fg_only=True).numpy().mean()
-
-    np.testing.assert_almost_equal(loss, ((1 - 1 / 3) + (1 - 1 / 3)) / 3,
-                                   decimal=3)
-    np.testing.assert_almost_equal(loss_fg, (1 - 1 / 2) / 2, decimal=3)
+    np.testing.assert_almost_equal(loss, (1 - 1 / 2) / 2, decimal=3)
 
 
 def test__unbatched_label_to_hot():
@@ -205,6 +181,52 @@ def test__InstanceMeanIoUEmbeddingLoss_margin():
         assert first_negative == margin + 1 or first_negative == margin
 
 
+def test_InstanceMeanIoUEmbeddingLoss_training():
+    '''Verifies that the InstanceMeanIoUEmbeddingLoss can be used to 
+    learn a simple thresholding operation.'''
+    def compute_instance_dist(model, raw, yt):
+        labels = yt.astype(int).squeeze(axis=-1)
+        pred = model(raw, training=False).numpy()
+        c1 = pred[labels == 1].mean(axis=0)
+        c2 = pred[labels == 2].mean(axis=0)
+
+        return np.linalg.norm(c1 - c2)
+
+    np.random.seed(25)
+    raw = np.random.normal(size=(1, 10, 10, 1)).astype(np.float32)
+    yt = (raw > 0.0).astype(np.int32) + 1
+    dataset = tf.data.Dataset.from_tensors((raw, yt)).repeat(100)
+
+    model = tf.keras.models.Sequential([
+        tf.keras.layers.Conv2D(10,
+                               kernel_size=1,
+                               padding='same',
+                               activation='relu'),
+        tf.keras.layers.Conv2D(10,
+                               kernel_size=1,
+                               padding='same',
+                               activation='relu'),
+        tf.keras.layers.Conv2D(2,
+                               kernel_size=1,
+                               padding='same',
+                               activation=None),
+    ])
+    model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=0.1),
+                  loss=InstanceMeanIoUEmbeddingLoss(margin=3))
+
+    mean_dist_before = compute_instance_dist(model, raw, yt)
+    loss_before = model.evaluate(dataset)
+
+    model.fit(dataset, epochs=1)
+
+    mean_dist_after = compute_instance_dist(model, raw, yt)
+    loss_after = model.evaluate(dataset)
+
+    assert loss_before * 0.95 >= loss_after
+    assert loss_after < 0.001
+    assert mean_dist_before < mean_dist_after
+
+
 @pytest.mark.parametrize(
     "intra_margin,inter_margin",
     [(3, 10), (1, 2), (0.1, 5.)],
@@ -252,3 +274,50 @@ def test_MarginInstanceEmbeddingLoss(intra_margin, inter_margin):
 
     yp = np.array([[[1], [1 + 2. * inter_margin]]], dtype=np.float32)
     np.testing.assert_almost_equal(margin_loss(yt, yp), 0.)
+
+
+def test_MarginInstanceEmbeddingLoss_training():
+    '''Verifies that the InstanceMeanIoUEmbeddingLoss can be used to 
+    learn a simple thresholding operation.'''
+    def compute_instance_dist(model, raw, yt):
+        labels = yt.astype(int).squeeze(axis=-1)
+        pred = model(raw, training=False).numpy()
+        c1 = pred[labels == 1].mean(axis=0)
+        c2 = pred[labels == 2].mean(axis=0)
+
+        return np.linalg.norm(c1 - c2)
+
+    np.random.seed(25)
+    raw = np.random.normal(size=(1, 10, 10, 1)).astype(np.float32)
+    yt = (raw > 0.0).astype(np.int32) + 1
+    dataset = tf.data.Dataset.from_tensors((raw, yt)).repeat(100)
+
+    model = tf.keras.models.Sequential([
+        tf.keras.layers.Conv2D(10,
+                               kernel_size=1,
+                               padding='same',
+                               activation='relu'),
+        tf.keras.layers.Conv2D(10,
+                               kernel_size=1,
+                               padding='same',
+                               activation='relu'),
+        tf.keras.layers.Conv2D(2,
+                               kernel_size=1,
+                               padding='same',
+                               activation=None),
+    ])
+
+    model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=0.1),
+                  loss=MarginInstanceEmbeddingLoss(2, 6))
+
+    mean_dist_before = compute_instance_dist(model, raw, yt)
+    loss_before = model.evaluate(dataset)
+
+    model.fit(dataset, epochs=1)
+
+    mean_dist_after = compute_instance_dist(model, raw, yt)
+    loss_after = model.evaluate(dataset)
+
+    assert loss_before * 0.95 >= loss_after
+    assert loss_after < 0.001
+    assert mean_dist_before < mean_dist_after
