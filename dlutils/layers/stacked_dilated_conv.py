@@ -13,6 +13,9 @@ class StackedDilatedConv(tf.keras.layers.Layer):
     
     Directly supports group convolutions to take advantage of cudnn implementation.
     '''
+
+    # NOTE with current workaround tf conv3D padding bug, "NCDHW" format is not supported
+
     def __init__(self,
                  rank,
                  filters,
@@ -33,8 +36,6 @@ class StackedDilatedConv(tf.keras.layers.Layer):
         self.kernel_initializer = kernel_initializer
         self.bias_initializer = bias_initializer
         super().__init__(**kwargs)
-
-        self.reduce_ch_conv = Conv(self.rank, self.filters, 1)
 
     def build(self, input_shape):
 
@@ -101,16 +102,33 @@ class StackedDilatedConv(tf.keras.layers.Layer):
         dilated_outs = list(itertools.chain(*zip(*dilated_outs)))
         return tf.concat(dilated_outs, axis=-1)
 
+    def _pad_input(self, inputs, spatial_dilations):
+
+        spatial_kernel_size = self.kernel.shape[:self.rank]
+
+        block_size = [
+            k + (k - 1) * (d - 1)
+            for d, k in zip(spatial_dilations, spatial_kernel_size)
+        ]
+        paddings = [[0, 0]] + [[(bs - 1) // 2, (bs - 1) // 2 + (bs - 1) % 2]
+                               for bs in block_size] + [[0, 0]]
+        return tf.pad(inputs, paddings, mode='CONSTANT')
+
     def call(self, inputs, **kwargs):
         dilated_outs = []
         for dilation in self.dilation_rates:
-            dilation = conv_utils.normalize_tuple(dilation, self.rank,
-                                                  'dilation_rate')
-            dilation = (1, ) + dilation + (1, )
+            spatial_dilations = conv_utils.normalize_tuple(
+                dilation, self.rank, 'dilation_rate')
 
-            x = self.tf_conv(inputs,
+            # TODO report/check if fix
+            # in tf 2.0, 2.1 tf.nn.Conv3D fails with dilation>1 and padding='SAME'
+            # tensorflow.python.framework.errors_impl.NotFoundError: No algorithm worked! [Op:Conv3D]
+            padded_inputs = self._pad_input(inputs, spatial_dilations)
+            dilation = (1, ) + spatial_dilations + (1, )
+
+            x = self.tf_conv(padded_inputs,
                              self.kernel,
-                             padding='SAME',
+                             padding='VALID',
                              strides=self.strides,
                              dilations=dilation)
             x = x + self.bias
@@ -127,14 +145,12 @@ class StackedDilatedConv(tf.keras.layers.Layer):
         return out
 
     def get_config(self):
-        '''
-        '''
-
         config = super().get_config()
+
         config['rank'] = self.rank
         config['filters'] = self.filters
         config['kernel_size'] = self.kernel_size
-        config['dilation_rates'] = self.dilation_rates
+        config['dilation_rates'] = list(self.dilation_rates)
         config['groups'] = self.groups
         config['activation'] = self.activation
         config['kernel_initializer'] = self.kernel_initializer

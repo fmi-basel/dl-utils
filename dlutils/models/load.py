@@ -9,13 +9,14 @@ from dlutils.layers.upsampling import BilinearUpSampling2D
 from dlutils.layers.padding import DynamicPaddingLayer, DynamicTrimmingLayer
 from dlutils.layers.input_scaler import ScaleAndClipLayer
 from dlutils.layers.semi_conv import AdditiveSemiConv2D, AdditiveSemiConv3D
+from dlutils.layers.stacked_dilated_conv import StackedDilatedConv
 
 CUSTOM_LAYERS = {
     cls.__name__: cls
     for cls in [
         DilatedConv2D, BilinearUpSampling2D, DynamicPaddingLayer,
         DynamicTrimmingLayer, ScaleAndClipLayer, AdditiveSemiConv2D,
-        AdditiveSemiConv3D
+        AdditiveSemiConv3D, StackedDilatedConv
     ]
 }
 
@@ -31,8 +32,10 @@ def load_model(file_path, *args, **kwargs):
 
     for loader in [keras_load_model, load_from_yaml_with_weights]:
         try:
-            return loader(
-                file_path, *args, custom_objects=custom_objects, **kwargs)
+            return loader(file_path,
+                          *args,
+                          custom_objects=custom_objects,
+                          **kwargs)
         except ValueError as err:
             logger.debug('{} did not succeed: {}'.format(
                 loader.__name__, str(err)))
@@ -47,8 +50,8 @@ def find_architecture_and_weight_paths(path):
         file_path = path
         weight_path = os.path.join(os.path.dirname(path), 'model_latest.h5')
     elif ext in ['.h5', '.hdf5']:
-        file_path = os.path.join(
-            os.path.dirname(path), 'model_architecture.yaml')
+        file_path = os.path.join(os.path.dirname(path),
+                                 'model_architecture.yaml')
         weight_path = path
     return file_path, weight_path
 
