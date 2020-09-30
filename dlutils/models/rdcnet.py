@@ -95,18 +95,17 @@ def rdc_block(n_groups=16,
     Conv = get_nd_conv(spatial_dims)
     # ~StackedDilatedConv = get_nd...
 
-    stacked_dilated_convs = [
-        StackedDilatedConv(filters=channels_per_group,
-                           dilation_rates=dilation_rates,
-                           kernel_size=k_size,
-                           rank=spatial_dims,
-                           padding='same') for _ in range(n_groups)
-    ]
-
     channels = channels_per_group * n_groups
-    reduce_ch_conv = Conv(
-        channels,
-        1)  # mixes ch/reduce from input_ch + channels_per_group*n_groups
+
+    sd_conv = StackedDilatedConv(rank=spatial_dims,
+                                 filters=channels,
+                                 kernel_size=k_size,
+                                 dilation_rates=dilation_rates,
+                                 groups=n_groups,
+                                 activation=LeakyReLU())
+
+    # mixes ch/reduce from input_ch + channels_per_group*n_groups
+    reduce_ch_conv = Conv(channels, 1)
 
     spatial_dropout = get_nd_spatial_dropout(spatial_dims)(dropout)
 
@@ -116,13 +115,7 @@ def rdc_block(n_groups=16,
         x = LeakyReLU()(x)
         x = reduce_ch_conv(x)
         x = LeakyReLU()(x)
-
-        x = [
-            conv(x[..., idx * channels_per_group:(idx + 1) *
-                   channels_per_group])
-            for idx, conv in enumerate(stacked_dilated_convs)
-        ]
-        x = tf.concat(x, axis=-1)
+        x = sd_conv(x)
 
         return x
 
