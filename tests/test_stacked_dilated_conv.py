@@ -6,9 +6,6 @@ import pytest
 
 from dlutils.layers.stacked_dilated_conv import StackedDilatedConv
 from tensorflow.keras.layers import LeakyReLU
-from dlutils.models import load_model
-
-# TODO complete similar to semi conv test with save/load
 
 
 # yapf: disable
@@ -17,7 +14,7 @@ from dlutils.models import load_model
     ((3, 32, 32, 16), 2, 32, 5, (1,2,4), 8, None),
 
     ((8, 11, 32, 23, 16), 3, 8, 3, (1,), 1, LeakyReLU()),
-    ((7, 11, 32, 23, 16), 3, 16, 5, (2,), 1, LeakyReLU())])
+    ((7, 11, 32, 23, 16), 3, 16, 5, (2,), 8, LeakyReLU())])
 # yapf: enable
 def test_stacked_dilated_conv(input_shape, rank, filters, kernel_size,
                               dilation_rates, groups, activation):
@@ -54,8 +51,8 @@ def test__concat_interleaved_groups():
                                  dilation_rates=(1, 2, 4),
                                  groups=3)
 
-    first_px_res = sd_conv._concat_interleaved_groups(
-        dilated_outs)[0, 0].numpy().squeeze()
+    first_px_res = sd_conv._concat_interleaved_groups(dilated_outs)[
+        0, 0].numpy().squeeze()
     assert all(first_px_res == [11, 21, 12, 22, 13, 23])
 
 
@@ -94,11 +91,10 @@ def test_save_load(tmpdir, rank):
     tf.keras.models.save_model(model, str(output_path))
     assert output_path.exists()
 
-    print(output_path)
-
     # reload it.
-    loaded_model = load_model(output_path)
-    loaded_model.summary()
+    loaded_model = tf.keras.models.load_model(
+        output_path,
+        custom_objects={StackedDilatedConv.__name__: StackedDilatedConv})
 
     # compare loaded and original model.
     def assert_identical_models(left, right):
