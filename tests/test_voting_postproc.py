@@ -1,7 +1,7 @@
 from dlutils.postprocessing.voting import embeddings_to_labels
 from dlutils.metrics.instance_segmentation import instance_intersection_over_union, _instance_precision_recall
 
-from skimage.external.tifffile import imread
+from skimage.io import imread
 import pytest
 
 

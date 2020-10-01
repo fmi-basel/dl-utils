@@ -8,11 +8,8 @@ from dlutils.layers.nd_layers import get_nd_conv, get_nd_spatial_dropout, get_nd
 from dlutils.layers.padding import DynamicPaddingLayer, DynamicTrimmingLayer
 from dlutils.layers.stacked_dilated_conv import StackedDilatedConv
 
-# TODO clean commented alternative to stack intermediate outputs
-# TODO use 2D/3D version of StackedDilatedConv (without rank argument)
 
-
-def delta_loop(output_channels, recurrent_block, default_n_steps=3):
+def delta_loop(output_channels, recurrent_block, n_steps=3):
     '''Recursively applies a given block to refine its output.
     
     Args:
@@ -21,56 +18,19 @@ def delta_loop(output_channels, recurrent_block, default_n_steps=3):
         input and outputting output_channels
         n_steps: number of times the block is applied
     '''
-    def block(x, state=None, n_steps=None):
+    def block(x, state=None):
 
         if state is None:
-            # NOTE: does not serialize model properly, channel size lost when reloading
             recurrent_shape = tf.concat(
                 [tf.shape(x)[:-1],
                  tf.constant([output_channels])], axis=0)
             state = tf.zeros(recurrent_shape, x.dtype)
 
-            # TODO figure out how to get the shape to serialize properly
-            # ~state = tf.zeros_like(x[..., 0])[..., None]
-            # ~state = tf.keras.backend.repeat_elements(state,
-            # ~output_channels,
-            # ~axis=-1)
-
-        if n_steps is None:
-            n_steps = default_n_steps
-
-        # static unrolling #############################################
+        # static unrolling
         for _ in range(n_steps):  # static unrolled loop
             delta = recurrent_block(tf.concat([x, state], axis=-1))
             state = state + delta
-
         return state
-
-        # dynamic alternative, with stacked intermediate outputs #######
-        # ~i = tf.constant(0)
-        # ~outputs = tf.TensorArray(tf.float32, size=n_steps)
-        # ~deltas = tf.TensorArray(tf.float32, size=n_steps)
-
-        # ~def cond(i, outputs, deltas, state):
-        # ~return tf.less(i, n_steps)
-
-        # ~def body(i, outputs, deltas, state):
-
-        # ~delta = recurrent_block(tf.concat([x, state], axis=-1))
-        # ~state = state + delta
-
-        # ~deltas = deltas.write(i, delta)
-        # ~outputs = outputs.write(i, state)
-
-        # ~i = tf.add(i, 1)
-        # ~return (i, outputs, deltas, state)
-
-        # ~i, outputs, deltas, state = tf.while_loop(cond,
-        # ~body,
-        # ~[i, outputs, deltas, state],
-        # ~swap_memory=True)
-
-        # ~return outputs.stack(), deltas.stack()
 
     return block
 
@@ -93,10 +53,7 @@ def rdc_block(n_groups=16,
     '''
 
     Conv = get_nd_conv(spatial_dims)
-    # ~StackedDilatedConv = get_nd...
-
     channels = channels_per_group * n_groups
-
     sd_conv = StackedDilatedConv(rank=spatial_dims,
                                  filters=channels,
                                  kernel_size=k_size,
@@ -181,12 +138,6 @@ def GenericRDCnetBase(input_shape,
     x = LeakyReLU()(x)
     x = conv_out(x)
     x = output_trimming([inputs, x])
-
-    # ~# with intermediate outputs
-    # ~xs = loop(x)
-    # ~xs = LeakyReLU()(xs)
-    # ~xs = tf.stack([output_trimming([inputs, conv_out(x)]) for x in xs], axis=0)
-    # ~x=xs
 
     name = 'RDCNet-F{}-DC{}-OC{}-G{}-DR{}-GC{}-S{}-D{}'.format(
         _format_tuple(downsampling_factor),
