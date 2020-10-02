@@ -54,7 +54,7 @@ def embeddings_to_labels(embeddings,
 
     fg_embeddings = tf.boolean_mask(embeddings, fg_mask)
     spatial_shape = embeddings.shape[:-1]
-    votes = count_votes(fg_embeddings, spatial_shape)
+    votes = count_votes(fg_embeddings, spatial_shape, spacing)
 
     centers = local_max(votes,
                         min_distance=peak_min_distance,
