@@ -7,6 +7,34 @@ from tensorflow.python.keras import initializers
 from tensorflow.python.keras.utils import conv_utils
 
 
+@tf.function(experimental_compile=True)
+def compiled_conv2d(inputs,
+                    filters,
+                    strides,
+                    padding,
+                    data_format='NHWC',
+                    dilations=None,
+                    name=None):
+    '''XLA compiled version of tf.nn.conv2d that supports group conv on CPU'''
+
+    return tf.nn.conv2d(inputs, filters, strides, padding, data_format,
+                        dilations, name)
+
+
+@tf.function(experimental_compile=True)
+def compiled_conv3d(inputs,
+                    filters,
+                    strides,
+                    padding,
+                    data_format='NDHWC',
+                    dilations=None,
+                    name=None):
+    '''XLA compiled version of tf.nn.conv3d that supports group conv on CPU'''
+
+    return tf.nn.conv3d(inputs, filters, strides, padding, data_format,
+                        dilations, name)
+
+
 class StackedDilatedConv(tf.keras.layers.Layer):
     '''Applies the same filters with different dilation rates to an input,
     concatenates the outputs and reduce it back to "filters" number of channels.
@@ -53,10 +81,10 @@ class StackedDilatedConv(tf.keras.layers.Layer):
         bias_initializer = initializers.get(self.bias_initializer)
 
         if self.rank == 2:
-            self.tf_conv = tf.nn.conv2d
+            self.tf_conv = compiled_conv2d
             self.strides = [1, 1, 1, 1]
         elif self.rank == 3:
-            self.tf_conv = tf.nn.conv3d
+            self.tf_conv = compiled_conv3d
             self.strides = [1, 1, 1, 1, 1]
         else:
             raise ValueError('rank {} not supported, expected 2 or 3'.format(
