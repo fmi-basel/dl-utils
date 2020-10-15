@@ -22,6 +22,10 @@ def test_2D_gaussian_filter(sigma, truncate):
 
     np.testing.assert_almost_equal(y, y_ref)
 
+    # check batch dim deduction
+    y = gaussian(x[None, ..., None]).numpy().squeeze()
+    np.testing.assert_almost_equal(y, y_ref)
+
 
 @pytest.mark.parametrize('sigma,truncate',
                          itertools.product([1, 3, (2, 2, 7)], [4, 2]))
@@ -37,6 +41,10 @@ def test_3D_gaussian_filter(sigma, truncate):
     gaussian = gaussian_filter(sigma=sigma, spatial_rank=3, truncate=truncate)
     y = gaussian(x[..., None]).numpy().squeeze()
 
+    np.testing.assert_almost_equal(y, y_ref, decimal=6)
+
+    # check batch dim deduction
+    y = gaussian(x[..., None]).numpy().squeeze()
     np.testing.assert_almost_equal(y, y_ref, decimal=6)
 
 

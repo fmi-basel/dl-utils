@@ -12,7 +12,7 @@ def gaussian_filter(sigma, spatial_rank, truncate=4):
         truncate: Truncate the filter at this many standard deviations
         
     Returns:
-        callable taking a tensor to fitler as input
+        callable taking a tensor to filter as input
     '''
 
     sigma = np.broadcast_to(np.asarray(sigma), spatial_rank)
@@ -37,24 +37,31 @@ def gaussian_filter(sigma, spatial_rank, truncate=4):
 
     def _filter(x):
 
-        if len(x.shape) != spatial_rank + 1:
+        if x.ndim not in (spatial_rank + 1, spatial_rank + 2):
             raise ValueError(
-                'Wrong input shape, expected {} spatial dimensions + channel, got {}'
+                'Wrong input shape, expected batch (optional) + {} spatial dimensions + channel, got {}'
                 .format(spatial_rank, len(x.shape)))
+
+        batched = x.ndim - 2 == spatial_rank
+
+        if not batched:
+            x = x[None]
 
         kernel = _gaussian_kernel(tf.shape(x)[-1], x.dtype)
         if spatial_rank == 2:
-            return tf.nn.depthwise_conv2d(x[None], kernel,
-                                          (1, ) * (spatial_rank + 2),
-                                          'SAME')[0]
+            y = tf.nn.depthwise_conv2d(x, kernel, (1, ) * (spatial_rank + 2),
+                                       'SAME')
         elif spatial_rank == 3:
             if x.shape[-1] == 1:
-                return tf.nn.conv3d(x[None], kernel,
-                                    (1, ) * (spatial_rank + 2), 'SAME')[0]
+                y = tf.nn.conv3d(x, kernel, (1, ) * (spatial_rank + 2), 'SAME')
             else:
                 raise NotImplementedError(
                     '3D gaussian filter for more than one channel is not implemented, input shape: {}'
                     .format(x.shape))
+
+        if not batched:
+            y = y[0]
+        return y
 
     return _filter
 
