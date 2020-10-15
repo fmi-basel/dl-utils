@@ -36,13 +36,13 @@ def gaussian_filter(sigma, spatial_rank, truncate=4):
                               axis=-1)
 
     def _filter(x):
-
-        if x.ndim not in (spatial_rank + 1, spatial_rank + 2):
+        ndim = len(x.shape)
+        if ndim not in (spatial_rank + 1, spatial_rank + 2):
             raise ValueError(
                 'Wrong input shape, expected batch (optional) + {} spatial dimensions + channel, got {}'
                 .format(spatial_rank, len(x.shape)))
 
-        batched = x.ndim - 2 == spatial_rank
+        batched = ndim - 2 == spatial_rank
 
         if not batched:
             x = x[None]
