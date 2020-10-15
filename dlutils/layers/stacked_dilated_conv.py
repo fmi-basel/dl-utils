@@ -6,33 +6,13 @@ from tensorflow.python.keras import activations
 from tensorflow.python.keras import initializers
 from tensorflow.python.keras.utils import conv_utils
 
-
-@tf.function(experimental_compile=True)
-def compiled_conv2d(inputs,
-                    filters,
-                    strides,
-                    padding,
-                    data_format='NHWC',
-                    dilations=None,
-                    name=None):
-    '''XLA compiled version of tf.nn.conv2d that supports group conv on CPU'''
-
-    return tf.nn.conv2d(inputs, filters, strides, padding, data_format,
-                        dilations, name)
-
-
-@tf.function(experimental_compile=True)
-def compiled_conv3d(inputs,
-                    filters,
-                    strides,
-                    padding,
-                    data_format='NDHWC',
-                    dilations=None,
-                    name=None):
-    '''XLA compiled version of tf.nn.conv3d that supports group conv on CPU'''
-
-    return tf.nn.conv3d(inputs, filters, strides, padding, data_format,
-                        dilations, name)
+if len(tf.config.experimental.list_physical_devices('GPU')) <= 0:
+    # XLA compiled version of tf.nn.conv2d that supports group conv on CPU
+    conv2d = tf.function(experimental_compile=True)(tf.nn.conv2d)
+    conv3d = tf.function(experimental_compile=True)(tf.nn.conv3d)
+else:
+    conv2d = tf.nn.conv2d
+    conv3d = tf.nn.conv3d
 
 
 class StackedDilatedConv(tf.keras.layers.Layer):
@@ -81,10 +61,10 @@ class StackedDilatedConv(tf.keras.layers.Layer):
         bias_initializer = initializers.get(self.bias_initializer)
 
         if self.rank == 2:
-            self.tf_conv = compiled_conv2d
+            self.tf_conv = conv2d
             self.strides = [1, 1, 1, 1]
         elif self.rank == 3:
-            self.tf_conv = compiled_conv3d
+            self.tf_conv = conv3d
             self.strides = [1, 1, 1, 1, 1]
         else:
             raise ValueError('rank {} not supported, expected 2 or 3'.format(
