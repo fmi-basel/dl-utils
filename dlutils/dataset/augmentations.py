@@ -3,6 +3,7 @@
 '''
 import tensorflow as tf
 import tensorflow_addons as tfa
+import numpy as np
 
 
 def random_axis_flip(axis, flip_prob):
@@ -137,7 +138,7 @@ def random_gaussian_offset(offset_sigma, keys):
 
 
 def random_intensity_scaling(bounds, keys):
-    '''draws a random scaling factor between bounds from a uniform distribution.
+    '''draws a random scaling factor between bounds from a uniform distribution in log space.
 
      Parameters
     ----------
@@ -153,6 +154,9 @@ def random_intensity_scaling(bounds, keys):
         transformation function.
 
     '''
+
+    log_bounds = tuple(np.log(bounds))
+
     def _distorter(input_dict):
         '''adds offset to the entries in input_dict that
         are indexed by keys.
@@ -162,9 +166,9 @@ def random_intensity_scaling(bounds, keys):
         for key in keys:
             image = output_dict[key]
             scale = tf.random.uniform(shape=[],
-                                      minval=bounds[0],
-                                      maxval=bounds[1])
-            output_dict[key] = image * scale
+                                      minval=log_bounds[0],
+                                      maxval=log_bounds[1])
+            output_dict[key] = image * tf.math.exp(scale)
         return output_dict
 
     return _distorter
