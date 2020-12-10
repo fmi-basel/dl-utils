@@ -123,6 +123,12 @@ class SpatialInstanceEmbeddingLossBase(InstanceEmbeddingLossBase):
 
     @abc.abstractmethod
     def _center_dist_to_probs(self, one_hot, center_dist):
+        '''
+        Args:
+            one_hot: one hot encoded y_true (i.e. groundthruth)
+            center_dist: distance map of each pixel to their respective instance center
+        '''
+
         pass
 
     def _unbatched_loss(self, packed):
