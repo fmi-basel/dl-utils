@@ -1,7 +1,7 @@
 import tensorflow as tf
 import numpy as np
 
-from tensorflow.keras.layers import Conv2D, Conv3D, Lambda
+from tensorflow.keras.layers import Conv2D, Conv3D, Layer
 from tensorflow.keras.models import Model
 
 from dlutils.blocks.aspp import aspp_block
@@ -120,8 +120,8 @@ def add_instance_seg_heads(model, n_classes, spacing=1.):
     semantic_class = tf.nn.softmax(semantic_class, axis=-1)
 
     # rename outputs
-    embeddings = Lambda(lambda x: x, name='embeddings')(embeddings)
-    semantic_class = Lambda(lambda x: x, name='semantic_class')(semantic_class)
+    embeddings = Layer(name='embeddings')(embeddings)
+    semantic_class = Layer(name='semantic_class')(semantic_class)
 
     return Model(inputs=model.inputs,
                  outputs=[embeddings, semantic_class],
