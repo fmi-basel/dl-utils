@@ -6,8 +6,13 @@ from tensorflow.python.keras import activations
 from tensorflow.python.keras import initializers
 from tensorflow.python.keras.utils import conv_utils
 
-if len(tf.config.experimental.list_physical_devices('GPU')) <= 0:
-    # XLA compiled version of tf.nn.conv2d that supports group conv on CPU
+if len(tf.config.list_physical_devices('GPU')) <= 0:
+    # XLA compiled version of tf.nn.conv2d|tf.nn.conv3d
+    # Without XLA compilation, dilation rates > 1 are not supported on CPU
+    #
+    # tensorflow.python.framework.errors_impl.InvalidArgumentError: CPU
+    # implementation of Conv2D|Conv3D currently only supports dilated rates of 1
+
     conv2d = tf.function(experimental_compile=True)(tf.nn.conv2d)
     conv3d = tf.function(experimental_compile=True)(tf.nn.conv3d)
 else:
@@ -71,7 +76,7 @@ class StackedDilatedConv(tf.keras.layers.Layer):
                 self.rank))
 
         # NOTE: awckward tf interface to cudnn group conv: https://github.com/tensorflow/tensorflow/pull/25818
-        # for 2D "the depth of inputs is not necessarily equal to filters.shape[2], but be a multiple of filters.shape[2]"
+        # for 2D "the depth of inputs is not necessarily equal to filters.shape[2], but can be a multiple of filters.shape[2]"
         kernel_shape = kernel_size + (input_channel // self.groups,
                                       self.filters)
         self.kernel = self.add_weight(name='kernel',
@@ -128,8 +133,8 @@ class StackedDilatedConv(tf.keras.layers.Layer):
             spatial_dilations = conv_utils.normalize_tuple(
                 dilation, self.rank, 'dilation_rate')
 
-            # TODO report/check if fix
-            # in tf 2.0, 2.1 tf.nn.Conv3D fails with dilation>1 and padding='SAME'
+            # NOTE: emulate 'SAME' padding
+            # At least up to  tf <= 2.3 tf.nn.Conv3D fails with dilation>1 and padding='SAME'
             # tensorflow.python.framework.errors_impl.NotFoundError: No algorithm worked! [Op:Conv3D]
             padded_inputs = self._pad_input(inputs, spatial_dilations)
             dilation = (1, ) + spatial_dilations + (1, )
