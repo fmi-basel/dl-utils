@@ -1,5 +1,7 @@
 import tensorflow as tf
 
+from dlutils.losses.utils import hingify
+
 
 class JaccardLoss(tf.keras.losses.Loss):
     '''
@@ -63,20 +65,8 @@ class HingedJaccardLoss(JaccardLoss):
         self.hinge_low = hinge_thresh
         self.hinge_high = 1. - hinge_thresh
 
-    def _hingify(self, y_true, y_pred):
-        '''Replaces pixel probs over hinge threshold by groundtruth value'''
-
-        y_pred = tf.where(
-            ~tf.cast(y_true, tf.bool) & (y_pred < self.hinge_low), 0., y_pred)
-        y_pred = tf.where(
-            tf.cast(y_true, tf.bool) & (y_pred > self.hinge_high), 1., y_pred)
-
-        return y_true, y_pred
-
     def call(self, y_true, y_pred):
-
-        y_true, y_pred = self._hingify(y_true, y_pred)
-
+        y_pred = hingify(y_true, y_pred, self.hinge_low, self.hinge_high)
         return super().call(y_true, y_pred)
 
 
