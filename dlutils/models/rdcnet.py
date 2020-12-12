@@ -97,7 +97,8 @@ def GenericRDCnetBase(input_shape,
                       channels_per_group=32,
                       n_steps=5,
                       dropout=0.1):
-    '''delta loop with input/output rescaling and atrous grouped conv recurrent block'''
+    '''Fully convolutional model consisting of a stacked dilated convlution 
+    block applied recursively'''
 
     spatial_dims = len(input_shape) - 1
     downsampling_factor = tuple(
