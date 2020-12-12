@@ -1,3 +1,4 @@
+import warnings
 import tensorflow as tf
 import numpy as np
 
@@ -7,6 +8,7 @@ from tensorflow.keras.models import Model
 from dlutils.blocks.aspp import aspp_block
 from dlutils.layers.upsampling import BilinearUpSampling2D
 from dlutils.layers.semi_conv import generate_coordinate_grid
+from dlutils.layers.nd_layers import get_nd_semiconv, get_nd_conv
 
 
 def add_fcn_output_layers(model,
@@ -93,13 +95,59 @@ def add_aspp_output_layers(model,
     return model
 
 
-def add_instance_seg_heads(model, n_classes, spacing=1.):
+def add_instance_seg_heads(model, n_classes, spacing=1., kernel_size=1):
+    '''Attaches a semi-convolutional embeddings layer and a semantic 
+    classification convolutional layer to the given model.
+    
+    Args:
+        model: model to which output layers are added
+        n_classes: number semantic classes
+        spacing: pixel/voxel spacing of the semi-conv embeddings
+        kernel_size: kernel size of the appended layers
+    '''
+
+    spatial_dims = len(model.inputs[0].shape) - 2
+    spacing = tuple(
+        float(val) for val in np.broadcast_to(spacing, spatial_dims))
+
+    if len(model.outputs) > 1:
+        warnings.warn(
+            'The model as {} outputs. #outputs > 1 will be ingnored'.format(
+                len(model.outputs)))
+
+    if n_classes > 1:
+        activation = 'softmax'
+    else:
+        activation = 'sigmoid'
+
+    last_layer = model.outputs[0]
+
+    conv = get_nd_conv(spatial_dims)(n_classes,
+                                     kernel_size=kernel_size,
+                                     activation=activation,
+                                     name='semantic_class',
+                                     padding='same')
+
+    semi_conv = get_nd_semiconv(spatial_dims)(spacing=spacing,
+                                              kernel_size=kernel_size,
+                                              name='embeddings',
+                                              padding='same')
+
+    semantic_class = conv(last_layer)
+    embeddings = semi_conv(last_layer)
+
+    return Model(inputs=model.inputs,
+                 outputs=[embeddings, semantic_class],
+                 name=model.name)
+
+
+def split_output_into_instance_seg(model, n_classes, spacing=1.):
     '''Splits the output of model into instance semi-conv embeddings and semantic class.
     
     Args:
-        model: delta_loop base model, should output at least 
-            n_classes + n_spatial-dimensions channels
+        model: A base model that outputs at least n_classes + n_spatial-dimensions channels
         n_classes: number semantic classes
+        spacing: pixel/voxel spacing of the semi-conv embeddings
     '''
 
     spatial_dims = len(model.inputs[0].shape) - 2

@@ -4,7 +4,7 @@ import numpy as np
 import h5py
 
 from dlutils.models import load_model
-from dlutils.models.heads import add_instance_seg_heads
+from dlutils.models.heads import split_output_into_instance_seg
 from dlutils.layers.padding import DynamicPaddingLayer, DynamicTrimmingLayer
 from dlutils.training.callbacks import ModelConfigSaver
 
@@ -41,7 +41,7 @@ def build_instance_seg_heads_model():
     input = tf.keras.layers.Input(batch_shape=(None, None, None, 1))
     x = tf.keras.layers.Conv2D(5, kernel_size=3)(input)
     model = tf.keras.models.Model(inputs=input, outputs=[x])
-    return add_instance_seg_heads(model, 3)
+    return split_output_into_instance_seg(model, 3)
 
 
 def convert_ndarray_to_list(config):

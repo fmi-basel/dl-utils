@@ -4,7 +4,7 @@ import numpy as np
 import itertools
 
 from dlutils.models.rdcnet import GenericRDCnetBase, delta_loop
-from dlutils.models.heads import add_instance_seg_heads
+from dlutils.models.heads import add_instance_seg_heads, split_output_into_instance_seg
 from dlutils.layers.padding import DynamicPaddingLayer, DynamicTrimmingLayer
 from dlutils.layers.stacked_dilated_conv import StackedDilatedConv
 
@@ -68,9 +68,14 @@ def test_GenericRDCnetBase(
     assert pred.shape == img.shape[:-1] + (n_output_channels, )
 
 
-@pytest.mark.parametrize('input_shape,spacing',
-                         [((16, 11, 3), 1.), ((16, 15, 16, 1), (1, 0.5, 0.5))])
-def test_instance_segmentation_head(input_shape, spacing):
+@pytest.mark.parametrize('input_shape,spacing,head_fun',
+                         [((16, 11, 3), 1., add_instance_seg_heads),
+                          ((16, 15, 16, 1),
+                           (1, 0.5, 0.5), add_instance_seg_heads),
+                          ((16, 11, 3), 1., split_output_into_instance_seg),
+                          ((16, 15, 16, 1),
+                           (1, 0.5, 0.5), split_output_into_instance_seg)])
+def test_instance_segmentation_head(input_shape, spacing, head_fun):
 
     n_classes = 5
     rank = len(input_shape) - 1
@@ -86,7 +91,7 @@ def test_instance_segmentation_head(input_shape, spacing):
                               channels_per_group=8,
                               n_steps=5)
 
-    model = add_instance_seg_heads(model, n_classes, spacing)
+    model = head_fun(model, n_classes, spacing)
 
     batch_size = 2
     img = np.random.randn(batch_size, *input_shape)
@@ -94,6 +99,34 @@ def test_instance_segmentation_head(input_shape, spacing):
 
     assert embeddings.shape == img.shape[:-1] + (rank, )
     assert classes.shape == img.shape[:-1] + (n_classes, )
+
+
+def test_saving_GenericRDCnetBase(tmpdir):
+    '''tests GenericRDCnetBase training and saving'''
+
+    input_tensor = tf.random.normal((4, 30, 32, 1))
+
+    model = GenericRDCnetBase((None, None, 1),
+                              downsampling_factor=2,
+                              n_downsampling_channels=7,
+                              n_output_channels=1,
+                              n_groups=4,
+                              dilation_rates=(1, 2, 4),
+                              channels_per_group=4,
+                              n_steps=5)
+
+    outputs = model(input_tensor)
+    assert outputs.shape == (4, 30, 32, 1)
+
+    # save and reload model
+    output_path = tmpdir / 'model.h5'
+    tf.keras.models.save_model(model, str(output_path))
+    loaded_model = tf.keras.models.load_model(output_path,
+                                              custom_objects=CUSTOM_LAYERS)
+
+    outputs_reloaded = loaded_model(input_tensor)
+
+    assert np.allclose(outputs.numpy(), outputs_reloaded.numpy(), rtol=1e-5)
 
 
 def get_dummy_dataset(n_samples, batch_size, repeats=None):
@@ -152,21 +185,7 @@ def test_training_GenericRDCnetBase(tmpdir):
     loss_trained = loss_fun(target, outputs_trained)
     assert outputs_trained.shape == (4, 30, 32, 1)
 
-    # save and reload model
-    output_path = tmpdir / 'model.h5'
-    tf.keras.models.save_model(model, str(output_path))
-    loaded_model = tf.keras.models.load_model(output_path,
-                                              custom_objects=CUSTOM_LAYERS)
-
-    outputs_reloaded = loaded_model(input_tensor)
-    loss_reloaded = loss_fun(target, outputs_reloaded)
-    assert outputs_reloaded.shape == (4, 30, 32, 1)
-
     assert not np.allclose(
         outputs_init.numpy(), outputs_trained.numpy(), rtol=1e-5)
-    assert np.allclose(outputs_trained.numpy(),
-                       outputs_reloaded.numpy(),
-                       rtol=1e-5)
 
     assert loss_trained.numpy() + 0.1 < loss_init.numpy()
-    np.testing.assert_almost_equal(loss_trained.numpy(), loss_reloaded.numpy())
