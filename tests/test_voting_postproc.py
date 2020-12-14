@@ -1,4 +1,5 @@
 import pytest
+import tensorflow as tf
 import numpy as np
 
 from dlutils.postprocessing.voting import count_votes, embeddings_to_labels, seeded_embeddings_to_labels
@@ -103,3 +104,46 @@ def test_seeded_embeddings_to_labels():
     assert not np.all(annot == labels)
     annot[50:65, 80:85] = 0
     assert np.all(annot == labels)
+
+
+def build_simple_model():
+    ''''''
+    input = tf.keras.layers.Input(batch_shape=(None, None, None, 1))
+    x = tf.keras.layers.Conv2D(32, kernel_size=3, activation='relu')(input)
+    embeddings = tf.keras.layers.Conv2D(2, kernel_size=1, name='embeddings')(x)
+    classes = tf.keras.layers.Conv2D(2, kernel_size=1,
+                                     name='semantic_classes')(x)
+    return tf.keras.models.Model(inputs=input, outputs=[embeddings, classes])
+
+
+def add_voting_postprocessing(model,
+                              peak_min_distance,
+                              spacing=1.,
+                              min_count=5):
+    '''Appends the instance segmentation post-processing step to the given model.
+    assumes batch_size == 1
+    '''
+
+    embeddings, classes = model.outputs
+    fg_mask = tf.argmax(classes, axis=-1, output_type=tf.int32)[0]
+    embeddings = embeddings[0]
+
+    labels = embeddings_to_labels(embeddings,
+                                  fg_mask,
+                                  peak_min_distance=peak_min_distance,
+                                  spacing=spacing,
+                                  min_count=min_count)
+
+    return tf.keras.models.Model(inputs=model.inputs,
+                                 outputs=[labels],
+                                 name=model.name)
+
+
+def test_build_inference_model():
+
+    model = build_simple_model()
+
+    # throws tensorflow.python.framework.errors_impl.OperatorNotAllowedInGraphError: using a `tf.Tensor` as a Python `bool` is not allowed in Graph execution. Use Eager execution or decorate this function with @tf.function.
+    # error raised when test for empty centers array is added in embeddings_to_labels()
+    #
+    inference_model = add_voting_postprocessing(model, peak_min_distance=5)
