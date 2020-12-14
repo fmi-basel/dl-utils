@@ -4,6 +4,7 @@ import numpy as np
 import h5py
 
 from dlutils.models import load_model
+from dlutils.models.heads import split_output_into_instance_seg
 from dlutils.layers.padding import DynamicPaddingLayer, DynamicTrimmingLayer
 from dlutils.training.callbacks import ModelConfigSaver
 
@@ -33,17 +34,47 @@ def build_custom_model():
     return tf.keras.models.Model(inputs=input, outputs=[x])
 
 
+def build_instance_seg_heads_model():
+    '''keras model wrapped with two custom layers from dlutils.
+
+    '''
+    input = tf.keras.layers.Input(batch_shape=(None, None, None, 1))
+    x = tf.keras.layers.Conv2D(5, kernel_size=3)(input)
+    model = tf.keras.models.Model(inputs=input, outputs=[x])
+    return split_output_into_instance_seg(model, 3)
+
+
+def convert_ndarray_to_list(config):
+    if isinstance(config, dict):
+        for key, val in config.items():
+            if isinstance(val, np.ndarray):
+                config[key] = val.tolist()
+            else:
+                convert_ndarray_to_list(val)
+
+    elif isinstance(config, list):
+        for val in config:
+            convert_ndarray_to_list(val)
+
+
 def compare_models(left, right):
     '''utility to compare two models.
 
     '''
-    assert left.get_config() == right.get_config()
+    left_config = left.get_config()
+    convert_ndarray_to_list(left_config)
+
+    right_config = right.get_config()
+    convert_ndarray_to_list(right_config)
+
+    assert left_config == right_config
     for left_w, right_w in zip(left.get_weights(), right.get_weights()):
         np.testing.assert_allclose(left_w, right_w)
 
 
-@pytest.mark.parametrize('model_constructor',
-                         [build_simple_model, build_custom_model])
+@pytest.mark.parametrize(
+    'model_constructor',
+    [build_simple_model, build_custom_model, build_instance_seg_heads_model])
 def test_default_save_load_h5(tmpdir, model_constructor):
     '''test saving/loading with default as h5.
 
@@ -74,8 +105,9 @@ def test_default_save_load_h5(tmpdir, model_constructor):
     compare_models(model, loaded_model)
 
 
-@pytest.mark.parametrize('model_constructor',
-                         [build_simple_model, build_custom_model])
+@pytest.mark.parametrize(
+    'model_constructor',
+    [build_simple_model, build_custom_model, build_instance_seg_heads_model])
 def test_model_config_saver(tmpdir, model_constructor):
     '''basic test of model IO with ModelConfigSaver
 
