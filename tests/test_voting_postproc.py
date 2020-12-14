@@ -1,7 +1,7 @@
 import pytest
 import numpy as np
 
-from dlutils.postprocessing.voting import count_votes, embeddings_to_labels
+from dlutils.postprocessing.voting import count_votes, embeddings_to_labels, seeded_embeddings_to_labels
 
 
 def test_3D_count_votes():
@@ -63,3 +63,43 @@ def test_embeddings_to_labels():
                                                               80:90] == 2)
     assert np.all(labels[~mask] == 0)
     assert np.unique(labels).tolist() == [0, 1, 2]
+
+
+def test_seeded_embeddings_to_labels():
+    '''Test conversion of spatial embeddings to labels using user-provided seeds'''
+
+    annot = np.zeros((100, 100), dtype=np.uint32)
+    annot[10:40, 25:50] = 1
+    annot[60:80, 10:30] = 2
+    annot[20:65, 80:85] = 3
+    mask = (annot > 0)
+
+    centers_lut = np.array([[0, 0], [20, 30], [70, 20], [40, 80]])
+    embeddings = centers_lut[annot]
+    centers = centers_lut[1:]
+
+    labels = seeded_embeddings_to_labels(embeddings.astype(np.float32),
+                                         fg_mask=mask,
+                                         seeds=centers,
+                                         dist_threshold=None)
+    labels = labels.numpy().astype(np.uint32)
+    assert np.all(annot == labels)
+
+    # split embeddings of label 3, keep same seeds ######################
+    embeddings[50:65, 80:85] = np.array([[60, 80]])
+
+    labels = seeded_embeddings_to_labels(embeddings.astype(np.float32),
+                                         fg_mask=mask,
+                                         seeds=centers,
+                                         dist_threshold=None)
+    labels = labels.numpy().astype(np.uint32)
+    assert np.all(annot == labels)
+
+    labels = seeded_embeddings_to_labels(embeddings.astype(np.float32),
+                                         fg_mask=mask,
+                                         seeds=centers,
+                                         dist_threshold=0.)
+    labels = labels.numpy().astype(np.uint32)
+    assert not np.all(annot == labels)
+    annot[50:65, 80:85] = 0
+    assert np.all(annot == labels)

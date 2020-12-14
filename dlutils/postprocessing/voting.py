@@ -73,3 +73,32 @@ def embeddings_to_labels(embeddings,
                              tf.cast(tf.shape(fg_mask), tf.int64))
 
     return tf.cond(tf.less_equal(tf.shape(centers)[0], 0), true_fun, false_fun)
+
+
+def seeded_embeddings_to_labels(embeddings,
+                                fg_mask,
+                                seeds,
+                                dist_threshold=None):
+    '''Converts voting embeddings to labels.
+    
+    dist_threshold: maximum distance from embeddings to its center. usefull to segment with partial seeds'''
+
+    centers = tf.gather_nd(embeddings, seeds)
+    fg_embeddings = tf.boolean_mask(embeddings, fg_mask)
+
+    def true_fun():
+        return tf.zeros(fg_mask.shape, dtype=tf.int32)
+
+    def false_fun():
+        fg_labels = nearest_neighbors(fg_embeddings, centers, 1)[0][:, 0]
+
+        if dist_threshold is not None:
+            dist = tf.norm(fg_embeddings - tf.gather(centers, fg_labels),
+                           axis=-1)
+            fg_labels = tf.where(dist <= dist_threshold, fg_labels, -1)
+
+        fg_labels = tf.cast(fg_labels, tf.int32)
+        return tf.scatter_nd(tf.where(fg_mask), fg_labels + 1,
+                             tf.cast(tf.shape(fg_mask), tf.int64))
+
+    return tf.cond(tf.less_equal(tf.shape(centers)[0], 0), true_fun, false_fun)
