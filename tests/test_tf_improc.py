@@ -83,7 +83,7 @@ def test_2D_local_max():
     assert peaks_to_set(peaks) == peaks_to_set(ref_peaks)
 
 
-def test_2D_local_max():
+def test_3D_local_max():
     '''Checks local max extraction in isotropic volume'''
 
     peak_img = np.zeros((16, 128, 128), dtype=np.float32)
