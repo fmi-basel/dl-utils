@@ -19,6 +19,9 @@ def count_votes(fg_embeddings, spatial_shape, spacing=1):
     spacing = np.broadcast_to(np.asarray(spacing), rank)[None]
     fg_embeddings_px = tf.cast(tf.round(fg_embeddings / spacing), tf.int32)
 
+    # flatten the spatial domain to a single dimension with linear index
+    # --> use native tensorflow 1D histogram
+    # reshape to original spatial rank
     flat_emb = fg_embeddings_px[..., -1]
     for idx in range(rank - 2, -1, -1):
         flat_emb += tf.reduce_prod(
@@ -64,7 +67,7 @@ def embeddings_to_labels(embeddings,
 
     # handle empty fg_embeddings/centers which fail in "nearest_neighbors"
     def true_fun():
-        return tf.zeros(fg_mask.shape, dtype=tf.int32)
+        return tf.zeros(tf.shape(fg_mask), dtype=tf.int32)
 
     def false_fun():
         fg_labels = nearest_neighbors(fg_embeddings, centers, 1)[0][:, 0]
@@ -87,7 +90,7 @@ def seeded_embeddings_to_labels(embeddings,
     fg_embeddings = tf.boolean_mask(embeddings, fg_mask)
 
     def true_fun():
-        return tf.zeros(fg_mask.shape, dtype=tf.int32)
+        return tf.zeros(tf.shape(fg_mask), dtype=tf.int32)
 
     def false_fun():
         fg_labels = nearest_neighbors(fg_embeddings, centers, 1)[0][:, 0]
