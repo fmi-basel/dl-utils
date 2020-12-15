@@ -67,7 +67,11 @@ def gaussian_filter(sigma, spatial_rank, truncate=4):
 
 
 def local_max(image, min_distance=1, threshold=1, spacing=1):
-    '''Finds local maxima that are above threshold
+    '''Finds local maxima that are above threshold.
+    
+    In order to avoid mutiple peaks from plateaus, the image is blurred 
+    (with a kernel size related to min_distance). However multiple peaks 
+    can still be returned for plateaus much larger min_distance.
     
     Args:
         image: greyscale image
@@ -76,7 +80,7 @@ def local_max(image, min_distance=1, threshold=1, spacing=1):
         spacing: pixel/voxel size
     '''
 
-    # implements x==max_pool(x) with pre-blurring to avoid
+    # implements x==max_pool(x) with pre-blurring to minimize
     # spurious max when neighbors have the same values
 
     if min_distance < 1:
