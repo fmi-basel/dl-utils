@@ -71,10 +71,10 @@ def local_max(image, min_distance=1, threshold=1, spacing=1):
     
     In order to avoid mutiple peaks from plateaus, the image is blurred 
     (with a kernel size related to min_distance). However multiple peaks 
-    can still be returned for plateaus much larger min_distance.
+    can still be returned for plateaus much larger than min_distance.
     
     Args:
-        image: greyscale image
+        image: greyscale image with optional channel dim
         min_distance: scalar defining the min distance between local max
         threshold: absolute intensity threshold to consider a local max
         spacing: pixel/voxel size
@@ -86,22 +86,29 @@ def local_max(image, min_distance=1, threshold=1, spacing=1):
     if min_distance < 1:
         raise ValueError('min_distance should be > 1: {}'.format(min_distance))
 
-    rank = len(image.shape)
+    # add channel dim if not present
+    image = tf.cond(
+        tf.shape(image)[-1] == 1, lambda: image,
+        lambda: tf.expand_dims(image, axis=-1))
+
+    rank = len(image.shape) - 1
     spacing = np.broadcast_to(np.asarray(spacing), rank)
 
     gaussian = gaussian_filter(sigma=np.sqrt(min_distance / spacing),
                                spatial_rank=rank)
     image = tf.cast(image, tf.float32)
 
-    # NOTE needs explicit channel dimension
-    blurred_image = gaussian(image[..., None])[..., 0]
+    blurred_image = gaussian(image)
 
     max_filt_size = np.maximum(1, min_distance / spacing * 2 + 1)
     max_image = tf.nn.max_pool(
-        blurred_image[None, ..., None],
+        blurred_image[None],
         ksize=max_filt_size,
         strides=1,
         padding='SAME',
-    )[0, ..., 0]
+    )
+    max_image = tf.squeeze(max_image, axis=[0])
+    max_mask = (max_image <= blurred_image) & (image >= threshold)
+    max_mask = tf.squeeze(max_mask, axis=[-1])
 
-    return tf.where((max_image <= blurred_image) & (image >= threshold))
+    return tf.where(max_mask)
