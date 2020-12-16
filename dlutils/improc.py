@@ -86,10 +86,8 @@ def local_max(image, min_distance=1, threshold=1, spacing=1):
     if min_distance < 1:
         raise ValueError('min_distance should be > 1: {}'.format(min_distance))
 
-    # add channel dim if not present
-    image = tf.cond(
-        tf.shape(image)[-1] == 1, lambda: image,
-        lambda: tf.expand_dims(image, axis=-1))
+    if image.shape[-1] != 1:
+        image = tf.expand_dims(image, axis=-1)
 
     rank = len(image.shape) - 1
     spacing = np.broadcast_to(np.asarray(spacing), rank)

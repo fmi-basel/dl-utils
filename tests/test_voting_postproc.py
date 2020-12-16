@@ -106,6 +106,9 @@ def test_seeded_embeddings_to_labels():
     assert np.all(annot == labels)
 
 
+# draft testing inclusion of postprocessing steps as part of a model ######
+
+
 def build_simple_model():
     ''''''
     input = tf.keras.layers.Input(batch_shape=(None, None, None, 1))
@@ -114,6 +117,24 @@ def build_simple_model():
     classes = tf.keras.layers.Conv2D(2, kernel_size=1,
                                      name='semantic_classes')(x)
     return tf.keras.models.Model(inputs=input, outputs=[embeddings, classes])
+
+
+class PostprocessingLayer(tf.keras.layers.Layer):
+    def __init__(self, peak_min_distance, spacing, min_count, *args, **kwargs):
+        # a quick and dirty implementation
+        super().__init__(self, *args, **kwargs)
+        self.peak_min_distance = peak_min_distance
+        self.spacing = spacing
+        self.min_count = min_count
+
+    def call(self, input):
+        embeddings, fg_mask = input
+        labels = embeddings_to_labels(embeddings,
+                                      fg_mask,
+                                      peak_min_distance=self.peak_min_distance,
+                                      spacing=self.spacing,
+                                      min_count=self.min_count)
+        return labels
 
 
 def add_voting_postprocessing(model,
@@ -128,11 +149,9 @@ def add_voting_postprocessing(model,
     fg_mask = tf.argmax(classes, axis=-1, output_type=tf.int32)[0]
     embeddings = embeddings[0]
 
-    labels = embeddings_to_labels(embeddings,
-                                  fg_mask,
-                                  peak_min_distance=peak_min_distance,
-                                  spacing=spacing,
-                                  min_count=min_count)
+    labels = PostprocessingLayer(peak_min_distance=peak_min_distance,
+                                 min_count=min_count,
+                                 spacing=spacing)([embeddings, fg_mask])
 
     return tf.keras.models.Model(inputs=model.inputs,
                                  outputs=[labels],
@@ -140,10 +159,19 @@ def add_voting_postprocessing(model,
 
 
 def test_build_inference_model():
+    '''test post processing as part of a model (draft for future reference).
+    
+    To work with keras API, the post processing must be wrapped in a keras Layer
+    '''
 
     model = build_simple_model()
-
-    # throws tensorflow.python.framework.errors_impl.OperatorNotAllowedInGraphError: using a `tf.Tensor` as a Python `bool` is not allowed in Graph execution. Use Eager execution or decorate this function with @tf.function.
-    # error raised when test for empty centers array is added in embeddings_to_labels()
-    #
+    # doesnt throw anymore at build time.
     inference_model = add_voting_postprocessing(model, peak_min_distance=5)
+
+    # doesnt throw at runtime either
+    some_input = np.random.randn(1, 32, 32, 1)
+    labels = inference_model.predict(some_input)
+
+    # and it seems to be able to recompile for other sizes, too.
+    some_other_input = np.random.randn(1, 64, 64, 1)
+    labels = inference_model.predict(some_other_input)

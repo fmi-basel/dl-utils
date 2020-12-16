@@ -1,6 +1,6 @@
 import tensorflow as tf
 import numpy as np
-from dlutils.improc import gaussian_filter, local_max
+from dlutils.improc import local_max
 
 from tensorflow.python.ops.gen_clustering_ops import nearest_neighbors
 
