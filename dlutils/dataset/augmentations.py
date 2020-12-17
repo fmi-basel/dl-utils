@@ -5,6 +5,8 @@ import tensorflow as tf
 import tensorflow_addons as tfa
 import numpy as np
 
+from dlutils.improc import gaussian_filter
+
 
 def random_axis_flip(axis, flip_prob):
     '''reverses axis with probability threshold
@@ -167,28 +169,6 @@ def random_intensity_scaling(bounds, keys):
     return _distorter
 
 
-# TODO import from tf improc implementation + add spacing argument + test 3D patch size
-def gaussian_filter(sigma):
-    def _gaussian_kernel(kernel_size, sigma, n_channels, dtype):
-        # https://stackoverflow.com/questions/59286171/gaussian-blur-image-in-dataset-pipeline-in-tensorflow
-        x = tf.range(-kernel_size // 2 + 1, kernel_size // 2 + 1, dtype=dtype)
-        g = tf.math.exp(-(tf.pow(x, 2) /
-                          (2 * tf.pow(tf.cast(sigma, dtype), 2))))
-        g_norm2d = tf.pow(tf.reduce_sum(g), 2)
-        g_kernel = tf.tensordot(g, g, axes=0) / g_norm2d
-        g_kernel = tf.expand_dims(g_kernel, axis=-1)
-        return tf.expand_dims(tf.tile(g_kernel, (1, 1, n_channels)), axis=-1)
-
-    def _filter(x):
-        kernel_size = tf.cast(4 * sigma, tf.int32)
-        kernel = _gaussian_kernel(kernel_size, sigma,
-                                  tf.shape(x)[-1], tf.float32)
-
-        return tf.nn.depthwise_conv2d(x[None], kernel, [1, 1, 1, 1], 'SAME')[0]
-
-    return _filter
-
-
 def random_gaussian_filter(sigma_range, keys, active_p=1., device='/gpu'):
     '''
     Applies a random gaussian filter to inputs specified by keys
@@ -225,10 +205,12 @@ def random_gaussian_filter(sigma_range, keys, active_p=1., device='/gpu'):
                                           maxval=sigma_range[1],
                                           dtype=tf.float32)
 
-                filter_fun = gaussian_filter(sigma)
-
                 output_dict = {key: val for key, val in input_dict.items()}
                 for key in keys:
+                    spatial_rank = len(output_dict[key].shape) - 1
+                    filter_fun = gaussian_filter(sigma,
+                                                 spatial_rank,
+                                                 truncate=2)
                     output_dict[key] = filter_fun(output_dict[key])
 
                 return output_dict
@@ -500,7 +482,9 @@ def random_warp(max_amplitude,
             smoothing_sigma = 2 * amplitude
 
             flow = tf.random.uniform(input_dict[keys[0]].shape[:2] + (2, ))
-            flow = gaussian_filter(smoothing_sigma)(flow)
+            flow = gaussian_filter(smoothing_sigma,
+                                   len(flow.shape) - 1,
+                                   truncate=2)(flow)
             flow = flow - tf.reduce_min(flow)
             flow = flow / (1e-6 + tf.reduce_max(flow))
             flow = (flow * 2 - 1) * amplitude
