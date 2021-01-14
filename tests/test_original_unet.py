@@ -5,6 +5,7 @@ import tensorflow as tf
 import pytest
 
 from dlutils.models.unet import GenericUnetBase
+from dlutils.models.unet import UnetBuilder
 from dlutils.models.unet import _abbreviate
 from dlutils.models.heads import add_fcn_output_layers
 
@@ -24,6 +25,71 @@ def test_abbreviate():
 
     assert _abbreviate(BatchNormalization.__name__) == 'BN'
     assert _abbreviate(LayerNormalization.__name__) == 'LN'
+
+
+@pytest.mark.parametrize('base_features', [1, 2, 8, 32])
+def test_unet_builder_nfeatures(base_features):
+
+    builder = UnetBuilder(conv_layer=None,
+                          upsampling_layer=None,
+                          downsampling_layer=None,
+                          n_levels=5,
+                          n_blocks=2,
+                          base_features=base_features)
+
+    num_features = [builder.features_of_level(level) for level in range(5)]
+    assert np.all(
+        num_features ==
+        [base_features * 2**level for level in range(len(num_features))])
+
+
+@pytest.mark.parametrize('num_blocks, num_levels, expected_trace',
+                         [(1, 5, 'BDBDBDBDBUCBUCBUCBUCB'),
+                          (2, 5, 'BBDBBDBBDBBDBBUCBBUCBBUCBBUCBB'),
+                          (1, 3, 'BDBDBUCBUCB'),
+                          (2, 3, 'BBDBBDBBUCBBUCBB'),
+                          (4, 3, 'BBBBDBBBBDBBBBUCBBBBUCBBBB'),
+                          (5, 1, 'BBBBB'),
+                          (1, 2, 'BDBUCB')])
+def test_unet_builder_order(num_levels, num_blocks, expected_trace):
+    '''checks correctness of builder call order.
+    '''
+    class InspectingUnetBuilder(UnetBuilder):
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args, **kwargs)
+            self.trace = ''
+
+        def add_trace(self, char):
+            self.trace += char
+
+        def add_single_block(self, *args, **kwargs):
+            self.add_trace('B')
+            return super().add_single_block(*args, **kwargs)
+
+        def add_downsampling(self, *args, **kwargs):
+            self.add_trace('D')
+            return super().add_downsampling(*args, **kwargs)
+
+        def add_upsampling(self, *args, **kwargs):
+            self.add_trace('U')
+            return super().add_upsampling(*args, **kwargs)
+
+        def add_combiner(self, *args, **kwargs):
+            self.add_trace('C')
+            return super().add_combiner(*args, **kwargs)
+
+    builder = InspectingUnetBuilder(
+        conv_layer=tf.keras.layers.Conv2D,
+        upsampling_layer=tf.keras.layers.UpSampling2D,
+        downsampling_layer=tf.keras.layers.MaxPooling2D,
+        n_levels=num_levels,
+        n_blocks=num_blocks,
+        base_features=8)
+
+    in_tensor = tf.keras.layers.Input(batch_shape=(None, 32, 32, 1))
+    builder.build_unet_block(in_tensor)
+
+    assert builder.trace == expected_trace
 
 
 @pytest.mark.parametrize(
@@ -100,4 +166,4 @@ def test_training_unet(input_shape, n_levels, with_bn):
     # train model
     model.fit(ins, outs, epochs=10)
     trained_loss = model.evaluate(ins, outs, verbose=False)
-    assert trained_loss + 0.1 < initial_loss
+    assert trained_loss + 0.05 < initial_loss
