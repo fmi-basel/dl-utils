@@ -43,6 +43,7 @@ def test_unet_builder_nfeatures(base_features):
         [base_features * 2**level for level in range(len(num_features))])
 
 
+# yapf: disable
 @pytest.mark.parametrize('num_blocks, num_levels, expected_trace',
                          [(1, 5, 'BDBDBDBDBUCBUCBUCBUCB'),
                           (2, 5, 'BBDBBDBBDBBDBBUCBBUCBBUCBBUCBB'),
@@ -51,6 +52,7 @@ def test_unet_builder_nfeatures(base_features):
                           (4, 3, 'BBBBDBBBBDBBBBUCBBBBUCBBBB'),
                           (5, 1, 'BBBBB'),
                           (1, 2, 'BDBUCB')])
+# yapf: enable
 def test_unet_builder_order(num_levels, num_blocks, expected_trace):
     '''checks correctness of builder call order.
     '''

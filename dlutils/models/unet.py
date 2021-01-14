@@ -16,9 +16,10 @@ from dlutils.layers.nd_layers import get_nd_upsampling
 def get_model_name(width, n_levels, dropout, with_bn, *args, **kwargs):
     '''
     '''
-    warn('get_model_name(..) for unet is deprecated. '
-         'Please use UnetBuilder.get_model_name(..) in the future.',
-         DeprecationWarning)
+    warn(
+        'get_model_name(..) for unet is deprecated. '
+        'Please use UnetBuilder.get_model_name(..) in the future.',
+        DeprecationWarning)
     name = 'UNet-{}-{}'.format(width, n_levels)
     if with_bn:
         name += '-BN'
@@ -62,8 +63,8 @@ class UnetBuilder:
                  base_features,
                  norm_layer=None,
                  activation_layer=tf.keras.layers.LeakyReLU,
-                 conv_params={},
-                 norm_params={}):
+                 conv_params=None,
+                 norm_params=None):
         '''
         '''
         self.n_levels = n_levels
@@ -75,10 +76,12 @@ class UnetBuilder:
             'padding': 'same',
             'kernel_size': 3
         }
-        self.conv_params.update(conv_params)
+        if conv_params is not None:
+            self.conv_params.update(conv_params)
 
         self.norm_params = {'axis': -1}
-        self.norm_params.update(norm_params)
+        if norm_params is not None:
+            self.norm_params.update(norm_params)
 
         self.conv_layer = conv_layer
         self.norm_layer = norm_layer
