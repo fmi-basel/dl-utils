@@ -53,43 +53,29 @@ def test_lr_finder(steps=100):
 
     def mnist_generator(batch_size):
         while True:
-            idx = np.random.choice(
-                len(x_train), size=batch_size, replace=False)
+            idx = np.random.choice(len(x_train),
+                                   size=batch_size,
+                                   replace=False)
             yield x_train[idx, ...], y_train[idx, ...]
 
-    # prepare model
     batch_size = 10
-
     reps = 1
-    axarr = None
-
-    suggested = []
 
     for _ in range(reps):
         model = create_model()
         compile(model)
-        lrf = lr_finder(
-            model,
-            mnist_generator(batch_size),
-            steps=steps,
-            base_lr=1e-5,
-            max_lr=1.0,
-            verbose=1)
-
-        suggested.append(lrf.suggest_lr(sigma=3))
+        lrf = lr_finder(model,
+                        mnist_generator(batch_size),
+                        steps=steps,
+                        base_lr=1e-5,
+                        max_lr=1.0,
+                        verbose=1)
 
         assert len(lrf.lr) == steps
         assert len(lrf.losses) == 1
         assert len(lrf.losses[0]) == steps
         assert lrf.lr[0] == 1e-5
         assert lrf.lr[-1] == 1.0
-
-        if __name__ == '__main__':
-            import matplotlib.pyplot as plt
-            axarr = lrf.plot(sigma=7, axarr=axarr)
-
-    if __name__ == '__main__':
-        plt.show()
 
 
 if __name__ == '__main__':

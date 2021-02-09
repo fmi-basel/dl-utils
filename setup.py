@@ -16,7 +16,7 @@ setup(
         'tests',
     ]),
     install_requires=[
-        'numpy', 'matplotlib', 'scipy', 'opencv-python>=3.4',
+        'numpy', 'scipy', 'opencv-python>=3.4',
         'tensorflow>=2.3,<2.4', 'scikit-image>=0.13', 'scikit-learn', 'future',
         'tqdm', 'pytest', 'pyyaml', 'h5py', 'tensorflow-addons>=0.11.2',
         'numba'
