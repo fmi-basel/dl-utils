@@ -15,14 +15,19 @@ def gaussian_filter(sigma, spatial_rank, truncate=4):
         callable taking a tensor to filter as input
     '''
 
-    sigma = np.broadcast_to(np.asarray(sigma), spatial_rank)
+    if not isinstance(sigma, tf.Tensor):
+        sigma = tf.constant(sigma)
+    sigma = tf.broadcast_to(sigma, [spatial_rank])
 
     def _gaussian_kernel(n_channels, dtype):
-        half_size = np.round(truncate * sigma).astype(int)
-        x_1d = [tf.range(-hs, hs + 1, dtype=dtype) for hs in half_size]
+        half_size = tf.cast(tf.round(truncate * sigma), tf.int32)
+        x_1d = [
+            tf.range(-half_size[i], half_size[i] + 1, dtype=dtype)
+            for i in range(len(half_size))
+        ]
         g_1d = [
-            tf.math.exp(-0.5 * tf.pow(x / tf.cast(s, dtype), 2))
-            for x, s in zip(x_1d, sigma)
+            tf.math.exp(-0.5 * tf.pow(x / tf.cast(sigma[idx], dtype), 2))
+            for idx, x in enumerate(x_1d)
         ]
 
         g_kernel = g_1d[0]
