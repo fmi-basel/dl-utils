@@ -393,7 +393,8 @@ def random_warp(max_amplitude,
                 interp_methods,
                 fill_mode=None,
                 cvals=None,
-                device='/gpu'):
+                device='/gpu',
+                smoothness_factor=2.):
     '''
     Deforms the inputs with a smoothed random flow field of amplitude 
     uniformly sampled between [0,max_amplitude].
@@ -414,6 +415,8 @@ def random_warp(max_amplitude,
     device : string
         device to use (cpu/gpu). Gaussian smoothing of the flow field
         on CPU with large amplitude can become a bottlneck during training.
+    smoothness_factor: float
+        scales the sampling size of the flow fields
 
     Returns
     -------
@@ -426,23 +429,6 @@ def random_warp(max_amplitude,
 
     if fill_mode is None:
         fill_mode = {key: 'CONSTANT' for key in interp_methods.keys()}
-
-    def _warp_bilinear(img, flow):
-
-        grid_x, grid_y = tf.meshgrid(
-            tf.range(tf.shape(img)[2], dtype=flow.dtype),
-            tf.range(tf.shape(img)[1], dtype=flow.dtype))
-
-        grid_x = grid_x + flow[..., 0]
-        grid_y = grid_y + flow[..., 1]
-
-        grid = tf.stack([grid_x, grid_y], axis=-1)
-        grid = tf.reshape(grid, (-1, 2))
-
-        img_resampled_flat = tfa.image.interpolate_bilinear(img,
-                                                            grid[None],
-                                                            indexing='xy')
-        return tf.reshape(img_resampled_flat, tf.shape(img))
 
     def _warp_nearest(img, flow):
 
@@ -463,7 +449,7 @@ def random_warp(max_amplitude,
     def _warp(img, flow, order):
 
         if order == 'BILINEAR':
-            return _warp_bilinear(img, flow)
+            return tfa.image.dense_image_warp(img, flow)
         elif order == 'NEAREST':
             return _warp_nearest(img, flow)
         else:
@@ -479,15 +465,19 @@ def random_warp(max_amplitude,
                                           dtype=tf.float32)
             pad_size = tf.cast(amplitude, tf.int32) + 1
             paddings = [[pad_size, pad_size], [pad_size, pad_size], [0, 0]]
-            smoothing_sigma = 2 * amplitude
 
-            flow = tf.random.uniform(input_dict[keys[0]].shape[:2] + (2, ))
-            flow = gaussian_filter(smoothing_sigma,
-                                   len(flow.shape) - 1,
-                                   truncate=2)(flow)
-            flow = flow - tf.reduce_min(flow)
-            flow = flow / (1e-6 + tf.reduce_max(flow))
-            flow = (flow * 2 - 1) * amplitude
+            flow_shape = tf.cast(
+                tf.shape(input_dict[keys[0]])[:2],
+                tf.float32) / (smoothness_factor * amplitude)
+            flow_shape = tf.cast(tf.round(flow_shape), tf.int32)
+            flow_shape = tf.concat([flow_shape, (2, )], axis=0)
+            flow = tf.random.uniform(flow_shape,
+                                     minval=-amplitude,
+                                     maxval=amplitude)
+
+            flow = tf.image.resize(flow,
+                                   input_dict[keys[0]].shape[:2],
+                                   method='gaussian')
             flow = tf.pad(flow, paddings)  # zero padding
 
             output_dict = {key: val for key, val in input_dict.items()}

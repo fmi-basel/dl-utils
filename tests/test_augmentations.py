@@ -386,3 +386,31 @@ def test_random_warp(patch_size, max_amplitude):
         original_labelsA = set(np.unique(original['segmA']))
         augmented_labelsA = set(np.unique(augmented['segmA'].numpy()))
         assert augmented_labelsA.issubset(original_labelsA.union({-1}))
+
+
+def test_random_warp_bias():
+    '''Deforms a meshgrid and checks that there is no bias on average.'''
+
+    reps = 100
+    patch_size = (25, 25)
+    max_amplitude = 3
+
+    coords = tf.stack(tf.meshgrid(tf.range(patch_size[1], dtype=tf.float32),
+                                  tf.range(patch_size[0], dtype=tf.float32)),
+                      axis=-1)
+
+    distorter = random_warp(max_amplitude,
+                            interp_methods={'coords': 'BILINEAR'},
+                            fill_mode={'coords': 'REFLECT'},
+                            cvals={'coords': 0})
+
+    flow_means = []
+
+    for _ in range(reps):
+        warped_coords = distorter({'coords': coords})['coords']
+        diff = coords - warped_coords
+        diff = diff[max_amplitude:-max_amplitude, max_amplitude:-max_amplitude]
+
+        flow_means.append(diff.numpy().mean())
+
+    np.testing.assert_almost_equal(np.mean(flow_means), 0., decimal=2)
