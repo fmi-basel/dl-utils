@@ -4,8 +4,8 @@ def set_seeds(seed_val=42):
     '''
     from numpy.random import seed
     seed(seed_val)
-    from tensorflow import set_random_seed
-    set_random_seed(seed_val)
+    from tensorflow import random
+    random.set_seed(seed_val)
 
 
 def get_zero_based_task_id(default_return=None):

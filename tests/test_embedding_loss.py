@@ -4,7 +4,13 @@ import numpy as np
 
 from scipy.ndimage.measurements import mean as label_mean
 from skimage.segmentation import relabel_sequential as sk_relabel_sequential
-from dlutils.losses.embedding.embedding_loss import InstanceEmbeddingLossBase, SpatialInstanceEmbeddingLossBase, InstanceMeanIoUEmbeddingLoss, MarginInstanceEmbeddingLoss, relabel_sequential
+
+from dlutils.utils import set_seeds
+from dlutils.losses.embedding.embedding_loss import InstanceEmbeddingLossBase
+from dlutils.losses.embedding.embedding_loss import SpatialInstanceEmbeddingLossBase
+from dlutils.losses.embedding.embedding_loss import InstanceMeanIoUEmbeddingLoss
+from dlutils.losses.embedding.embedding_loss import MarginInstanceEmbeddingLoss
+from dlutils.losses.embedding.embedding_loss import relabel_sequential
 
 
 class DummySpatialInstanceEmbeddingLoss(SpatialInstanceEmbeddingLossBase):
@@ -26,8 +32,8 @@ def test__unbatched_soft_jaccard():
 
     one_hot = tf.cast(tf.one_hot(tf.squeeze(yt, -1), 3), tf.float32)
     probs = tf.cast(tf.one_hot(tf.squeeze(yp, -1), 3), tf.float32)
-    loss = _unbatched_soft_jaccard(one_hot[..., 1:],
-                                   probs[..., 1:]).numpy().mean()
+    loss = _unbatched_soft_jaccard(one_hot[..., 1:], probs[...,
+                                                           1:]).numpy().mean()
 
     np.testing.assert_almost_equal(loss, (1 - 1 / 2) / 2, decimal=3)
 
@@ -37,7 +43,7 @@ def test__unbatched_label_to_hot():
     _unbatched_label_to_hot = DummySpatialInstanceEmbeddingLoss(
     )._unbatched_label_to_hot
 
-    np.random.seed(25)
+    set_seeds(25)
     labels = np.random.choice(range(5), size=(10, 10, 1)).astype(np.int32)
 
     hot_labels = _unbatched_label_to_hot(labels)
@@ -54,7 +60,7 @@ def test__unbatched_label_to_hot():
 
 def test_relabel_sequential():
 
-    np.random.seed(25)
+    set_seeds(25)
     labels = np.random.choice([-1, 0, 2, 3, 4, 5],
                               size=(10, 10, 1)).astype(np.int32)
 
@@ -80,7 +86,7 @@ def test__unbatched_embedding_center():
     _unbatched_embedding_center = DummySpatialInstanceEmbeddingLoss(
     )._unbatched_embedding_center
 
-    np.random.seed(25)
+    set_seeds(25)
     labels = np.random.choice(range(5), size=(10, 10, 1)).astype(np.int32)
     hot_labels = _unbatched_label_to_hot(labels)
 
@@ -140,7 +146,7 @@ def test_InstanceEmbeddingLossBase():
 
 def test_InstanceMeanIoUEmbeddingLoss():
 
-    np.random.seed(25)
+    set_seeds(25)
     n_classes = 5
 
     # random labels, 5 classes, batch size = 4
@@ -192,7 +198,7 @@ def test_InstanceMeanIoUEmbeddingLoss_training():
 
         return np.linalg.norm(c1 - c2)
 
-    np.random.seed(25)
+    set_seeds(25)
     raw = np.random.normal(size=(1, 10, 10, 1)).astype(np.float32)
     yt = (raw > 0.0).astype(np.int32) + 1
     dataset = tf.data.Dataset.from_tensors((raw, yt)).repeat(100)
@@ -223,8 +229,8 @@ def test_InstanceMeanIoUEmbeddingLoss_training():
     loss_after = model.evaluate(dataset)
 
     assert loss_before * 0.95 >= loss_after
-    assert loss_after < 0.001
     assert mean_dist_before < mean_dist_after
+    assert loss_after < 0.005
 
 
 @pytest.mark.parametrize(
@@ -236,7 +242,7 @@ def test_MarginInstanceEmbeddingLoss(intra_margin, inter_margin):
     margin_loss = MarginInstanceEmbeddingLoss(intra_margin, inter_margin)
 
     # random labels, 5 classes, batch size = 4
-    np.random.seed(11)
+    set_seeds(11)
     yt = np.random.choice(range(5), size=(4, 10, 10, 1)).astype(np.int32)
     # perfect embedding of size 10, more than inter_margin appart from each other
     yp_prefect = np.tile(yt, (1, 1, 1, 10)) * 1.1 * inter_margin
@@ -287,7 +293,7 @@ def test_MarginInstanceEmbeddingLoss_training():
 
         return np.linalg.norm(c1 - c2)
 
-    np.random.seed(25)
+    set_seeds(25)
     raw = np.random.normal(size=(1, 10, 10, 1)).astype(np.float32)
     yt = (raw > 0.0).astype(np.int32) + 1
     dataset = tf.data.Dataset.from_tensors((raw, yt)).repeat(100)
@@ -319,5 +325,5 @@ def test_MarginInstanceEmbeddingLoss_training():
     loss_after = model.evaluate(dataset)
 
     assert loss_before * 0.95 >= loss_after
-    assert loss_after < 0.001
     assert mean_dist_before < mean_dist_after
+    assert loss_after < 0.005

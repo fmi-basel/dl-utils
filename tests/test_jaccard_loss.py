@@ -2,7 +2,11 @@ import pytest
 import tensorflow as tf
 import numpy as np
 
-from dlutils.losses.jaccard_loss import JaccardLoss, HingedJaccardLoss, BinaryJaccardLoss, HingedBinaryJaccardLoss
+from dlutils.utils import set_seeds
+from dlutils.losses.jaccard_loss import JaccardLoss
+from dlutils.losses.jaccard_loss import HingedJaccardLoss
+from dlutils.losses.jaccard_loss import BinaryJaccardLoss
+from dlutils.losses.jaccard_loss import HingedBinaryJaccardLoss
 
 np.random.seed(11)
 
@@ -201,7 +205,7 @@ def test_HingedBinaryJaccardLoss(symmetric, yt):
 def test_JaccardLoss_training():
     '''Verifies that the JaccardLoss can be used to learn a simple thresholding operation.'''
 
-    np.random.seed(25)
+    set_seeds(25)
     raw = np.random.normal(size=(1, 10, 10, 1)).astype(np.float32)
     yt = (raw > 0.0).astype(np.float32)
     dataset = tf.data.Dataset.from_tensors((raw, yt))
@@ -226,7 +230,7 @@ def test_JaccardLoss_training():
 def test_BinaryJaccardLoss_training():
     '''Verifies that the BinaryJaccardLoss can be used to learn a simple thresholding operation.'''
 
-    np.random.seed(25)
+    set_seeds(25)
     raw = np.random.normal(size=(1, 10, 10, 1)).astype(np.float32)
     yt = (raw > 0.0).astype(np.float32)
     dataset = tf.data.Dataset.from_tensors((raw, yt))
