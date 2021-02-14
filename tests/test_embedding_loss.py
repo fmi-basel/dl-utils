@@ -229,8 +229,8 @@ def test_InstanceMeanIoUEmbeddingLoss_training():
     loss_after = model.evaluate(dataset)
 
     assert loss_before * 0.95 >= loss_after
-    assert loss_after < 0.001
     assert mean_dist_before < mean_dist_after
+    assert loss_after < 0.005
 
 
 @pytest.mark.parametrize(
@@ -325,5 +325,5 @@ def test_MarginInstanceEmbeddingLoss_training():
     loss_after = model.evaluate(dataset)
 
     assert loss_before * 0.95 >= loss_after
-    assert loss_after < 0.001
     assert mean_dist_before < mean_dist_after
+    assert loss_after < 0.005
