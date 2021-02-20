@@ -16,3 +16,19 @@ Running pytest with the default options will skip tests marked as "slow" such as
 ```
 pytest --runslow
 ```
+
+## Citation
+
+```bibtex
+@software{dlutils,
+  author       = {Rempfler, Markus and
+                  Ortiz, Raphael},
+  title        = {dl-utils},
+  month        = feb,
+  year         = 2021,
+  publisher    = {Zenodo},
+  version      = {0.2.0},
+  doi          = {10.5281/zenodo.4543782},
+  url          = {https://doi.org/10.5281/zenodo.4543782}
+}
+```
