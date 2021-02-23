@@ -1,3 +1,6 @@
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.4543782.svg)](https://doi.org/10.5281/zenodo.4543782)
+
+
 # dl-utils
 
 a random collection of utilities for using tensorflow/keras.
