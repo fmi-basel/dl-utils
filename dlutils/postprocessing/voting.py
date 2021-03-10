@@ -47,7 +47,7 @@ def embeddings_to_labels(embeddings,
         spacing: pixel/voxel size
         peak_min_distance: minimum distance between instance centers
         min_count: minimum number of vote to consider an instance
-        return_centers: if true returns the embeddigns centers as second argument
+        return_centers: if true returns the embedding centers as second argument
     
     Notes:
     embeddings obtained from semi-conv layer are expected to be in isotropic coords
@@ -97,7 +97,7 @@ def seeded_embeddings_to_labels(embeddings,
 
     if seeds is None and centers is None:
         raise ValueError(
-            'at least on of seeds or centers (priority) need to be specified')
+            'at least one of seeds or centers (priority) need to be specified')
 
     if centers is None:
         centers = tf.gather_nd(embeddings, seeds)
