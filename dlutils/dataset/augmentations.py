@@ -449,7 +449,7 @@ def random_warp(max_amplitude,
     def _warp(img, flow, order):
 
         if order == 'BILINEAR':
-            return tfa.image.dense_image_warp(img, flow)
+            return tfa.image.dense_image_warp(img, -flow[..., ::-1])
         elif order == 'NEAREST':
             return _warp_nearest(img, flow)
         else:
@@ -460,7 +460,7 @@ def random_warp(max_amplitude,
             keys = list(interp_methods.keys())
 
             amplitude = tf.random.uniform(shape=[],
-                                          minval=0.,
+                                          minval=1.,
                                           maxval=max_amplitude,
                                           dtype=tf.float32)
             pad_size = tf.cast(amplitude, tf.int32) + 1
@@ -476,7 +476,7 @@ def random_warp(max_amplitude,
                                      maxval=amplitude)
 
             flow = tf.image.resize(flow,
-                                   input_dict[keys[0]].shape[:2],
+                                   tf.shape(input_dict[keys[0]])[:2],
                                    method='gaussian')
             flow = tf.pad(flow, paddings)  # zero padding
 
