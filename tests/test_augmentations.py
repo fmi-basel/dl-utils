@@ -338,32 +338,35 @@ def test_random_warp(patch_size, max_amplitude):
     '''
     reps = 10
 
+    mask = tf.convert_to_tensor(np.random.randn(*patch_size) > .0,
+                                dtype=tf.float32)
+
     original = {
-        'img':
-        tf.convert_to_tensor(np.random.randn(*patch_size), dtype=tf.float32),
-        'segmA':
-        tf.convert_to_tensor(np.random.randn(*patch_size) > .0,
-                             dtype=tf.float32),
-        'segmB':
-        tf.convert_to_tensor(np.random.randn(*patch_size) > .0,
-                             dtype=tf.float32)
+        'img': tf.convert_to_tensor(np.random.randn(*patch_size),
+                                    dtype=tf.float32),
+        'segmA': mask,
+        'segmB': mask,
+        'segmC': mask
     }
 
     distorter = random_warp(max_amplitude,
                             interp_methods={
                                 'img': 'BILINEAR',
                                 'segmA': 'NEAREST',
-                                'segmB': 'BILINEAR'
+                                'segmB': 'BILINEAR',
+                                'segmC': 'NEAREST'
                             },
                             fill_mode={
                                 'img': 'REFLECT',
                                 'segmA': 'CONSTANT',
-                                'segmB': 'CONSTANT'
+                                'segmB': 'CONSTANT',
+                                'segmC': 'CONSTANT'
                             },
                             cvals={
                                 'img': 0,
                                 'segmA': -1,
-                                'segmB': 0
+                                'segmB': 0,
+                                'segmC': 0
                             })
 
     previous = distorter(original)
@@ -379,6 +382,13 @@ def test_random_warp(patch_size, max_amplitude):
 
         assert not np.all(
             augmented['segmA'].numpy() == augmented['segmB'].numpy())
+
+        # check that bilinear and nearest interpolation match in uniform regions
+        uniform_mask = (augmented['segmB'].numpy() <=
+                        0.) | (augmented['segmB'].numpy() >= 1.)
+        np.testing.assert_almost_equal(
+            augmented['segmB'].numpy()[uniform_mask],
+            augmented['segmC'].numpy()[uniform_mask])
 
         assert augmented['segmA'].numpy().min() >= -1
         assert augmented['segmB'].numpy().min() >= 0

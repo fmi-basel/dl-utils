@@ -95,7 +95,11 @@ def add_aspp_output_layers(model,
     return model
 
 
-def add_instance_seg_heads(model, n_classes, spacing=1., kernel_size=1):
+def add_instance_seg_heads(model,
+                           n_classes,
+                           spacing=1.,
+                           kernel_size=1,
+                           class_activation=True):
     '''Attaches a semi-convolutional embeddings layer and a semantic 
     classification convolutional layer to the given model.
     
@@ -115,7 +119,9 @@ def add_instance_seg_heads(model, n_classes, spacing=1., kernel_size=1):
             'The model as {} outputs. #outputs > 1 will be ingnored'.format(
                 len(model.outputs)))
 
-    if n_classes > 1:
+    if not class_activation:
+        activation = None
+    elif n_classes > 1:
         activation = 'softmax'
     else:
         activation = 'sigmoid'
@@ -141,7 +147,10 @@ def add_instance_seg_heads(model, n_classes, spacing=1., kernel_size=1):
                  name=model.name)
 
 
-def split_output_into_instance_seg(model, n_classes, spacing=1.):
+def split_output_into_instance_seg(model,
+                                   n_classes,
+                                   spacing=1.,
+                                   class_activation=True):
     '''Splits the output of model into instance semi-conv embeddings and semantic class.
     
     Args:
@@ -165,7 +174,8 @@ def split_output_into_instance_seg(model, n_classes, spacing=1.):
     embeddings = coords + vfield
 
     semantic_class = y_preds[..., spatial_dims:spatial_dims + n_classes]
-    semantic_class = tf.nn.softmax(semantic_class, axis=-1)
+    if class_activation:
+        semantic_class = tf.nn.softmax(semantic_class, axis=-1)
 
     # rename outputs
     embeddings = Layer(name='embeddings')(embeddings)

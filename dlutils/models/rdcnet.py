@@ -1,10 +1,11 @@
 import tensorflow as tf
 import numpy as np
+import warnings
 
 from tensorflow.keras import Model
 from tensorflow.keras.layers import Input, LeakyReLU
 
-from dlutils.layers.nd_layers import get_nd_conv, get_nd_spatial_dropout, get_nd_conv_transposed
+from dlutils.layers.nd_layers import get_nd_conv, get_nd_spatial_dropout, get_nd_conv_transposed, get_nd_upsampling
 from dlutils.layers.padding import DynamicPaddingLayer, DynamicTrimmingLayer
 from dlutils.layers.stacked_dilated_conv import StackedDilatedConv
 
@@ -96,7 +97,8 @@ def GenericRDCnetBase(input_shape,
                       dilation_rates=(1, 2, 4, 8, 16),
                       channels_per_group=32,
                       n_steps=5,
-                      dropout=0.1):
+                      dropout=0.1,
+                      up_method='transposed_conv'):
     '''Fully convolutional model consisting of a stacked dilated convlution 
     block applied recursively'''
 
@@ -121,11 +123,22 @@ def GenericRDCnetBase(input_shape,
                    strides=downsampling_factor,
                    padding='same')
 
-    ConvTranspose = get_nd_conv_transposed(spatial_dims)
-    conv_out = ConvTranspose(n_output_channels,
-                             kernel_size=out_kernel_size,
-                             strides=downsampling_factor,
-                             padding='same')
+    if up_method == 'transposed_conv':
+        ConvTranspose = get_nd_conv_transposed(spatial_dims)
+        conv_out = ConvTranspose(n_output_channels,
+                                 kernel_size=out_kernel_size,
+                                 strides=downsampling_factor,
+                                 padding='same')
+    elif up_method == 'upsample':
+        UpSampling = get_nd_upsampling(spatial_dims)
+        upsampling_out = UpSampling(downsampling_factor)
+        conv_out = Conv(n_output_channels,
+                        kernel_size=out_kernel_size,
+                        padding='same')
+    else:
+        raise ValueError(
+            '{} up_method not recognized, expects one of: transposed_conv, upsample'
+            .format(up_method))
 
     input_padding = DynamicPaddingLayer(downsampling_factor,
                                         ndim=spatial_dims + 2)
@@ -137,6 +150,8 @@ def GenericRDCnetBase(input_shape,
 
     x = loop(x)
     x = LeakyReLU()(x)
+    if up_method == 'upsample':
+        x = upsampling_out(x)
     x = conv_out(x)
     x = output_trimming([inputs, x])
 

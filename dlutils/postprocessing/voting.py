@@ -37,7 +37,8 @@ def embeddings_to_labels(embeddings,
                          fg_mask,
                          peak_min_distance,
                          spacing=1.,
-                         min_count=5):
+                         min_count=5,
+                         return_centers=False):
     '''Splits a foreground mask into instance labels defined by semi-convolutional embeddings.
     
     Args:
@@ -46,6 +47,7 @@ def embeddings_to_labels(embeddings,
         spacing: pixel/voxel size
         peak_min_distance: minimum distance between instance centers
         min_count: minimum number of vote to consider an instance
+        return_centers: if true returns the embedding centers as second argument
     
     Notes:
     embeddings obtained from semi-conv layer are expected to be in isotropic coords
@@ -75,18 +77,31 @@ def embeddings_to_labels(embeddings,
         return tf.scatter_nd(tf.where(fg_mask), fg_labels + 1,
                              tf.cast(tf.shape(fg_mask), tf.int64))
 
-    return tf.cond(tf.less_equal(tf.shape(centers)[0], 0), true_fun, false_fun)
+    labels = tf.cond(tf.less_equal(tf.shape(centers)[0], 0), true_fun,
+                     false_fun)
+
+    if return_centers:
+        return labels, centers
+    else:
+        return labels
 
 
 def seeded_embeddings_to_labels(embeddings,
                                 fg_mask,
-                                seeds,
-                                dist_threshold=None):
+                                seeds=None,
+                                dist_threshold=None,
+                                centers=None):
     '''Converts voting embeddings to labels.
     
     dist_threshold: maximum distance from embeddings to its center. usefull to segment with partial seeds'''
 
-    centers = tf.gather_nd(embeddings, seeds)
+    if seeds is None and centers is None:
+        raise ValueError(
+            'at least one of seeds or centers (priority) need to be specified')
+
+    if centers is None:
+        centers = tf.gather_nd(embeddings, seeds)
+
     fg_embeddings = tf.boolean_mask(embeddings, fg_mask)
 
     def true_fun():
