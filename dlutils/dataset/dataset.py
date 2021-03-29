@@ -102,8 +102,8 @@ def create_dataset(filename_pattern,
     patch_size : tuple or None
         Shape of patch to sample. Set to None if no patch sampling is desired.
     balance_records : bool
-        iI True, balances the records by repeating them independently before 
-        interleaving. Creates an inifinte dataset.
+        if True, balances the records by repeating them independently before 
+        interleaving. Creates an infinite dataset.
 
     Returns
     -------
