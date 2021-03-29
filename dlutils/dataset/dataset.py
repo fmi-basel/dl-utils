@@ -28,8 +28,8 @@ def parse_from_tfrecords(filename_pattern,
     num_parallel_calls : int
         Number of parallel calls for parsing. Default: AUTOTUNE.
     balance_records : bool
-        iI True, balances the records by repeating them independently before 
-        interleaving. Creates an inifinte dataset.
+        if True, balances the records by repeating them independently before 
+        interleaving. Creates an infinite dataset.
 
     Returns
     -------
