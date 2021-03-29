@@ -1,6 +1,5 @@
 import itertools
 import abc
-import os
 from glob import glob
 
 import pytest
