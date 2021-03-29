@@ -59,7 +59,6 @@ def parse_from_tfrecords(filename_pattern,
     # read from all with interleave...
     dataset = filenames.interleave(
         load_record_fun,
-        # ~dataset = filenames.interleave(tf.data.TFRecordDataset,
         cycle_length=cycle_length,
         num_parallel_calls=num_parallel_calls)
     # ...and parse the samples.
