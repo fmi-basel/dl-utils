@@ -28,7 +28,6 @@ class Setup(abc.ABC):
     tf.data pipeline.
 
     '''
-
     def __init__(self, n_files, n_samples_per_file, output_folder):
         '''
         '''
@@ -81,8 +80,9 @@ class ClassificationDatasetSetup(Setup):
     '''create an image-to-class dataset.
 
     '''
-    parser = ImageToClassRecordParser(
-        image_dtype=tf.uint8, n_classes=10, fixed_ndim=3)
+    parser = ImageToClassRecordParser(image_dtype=tf.uint8,
+                                      n_classes=10,
+                                      fixed_ndim=3)
     img_shape = (16, 16, 1)
 
     def _generator(self):
@@ -92,9 +92,10 @@ class ClassificationDatasetSetup(Setup):
         '''
         counter = 0
         while True:
-            image = np.random.randint(
-                0, 255, np.prod(self.img_shape),
-                dtype=np.uint8).reshape(self.img_shape)
+            image = np.random.randint(0,
+                                      255,
+                                      np.prod(self.img_shape),
+                                      dtype=np.uint8).reshape(self.img_shape)
             label = counter % self.parser.n_classes
             yield image, label
             counter += 1
@@ -104,8 +105,9 @@ class SegmentationDatasetSetup(Setup):
     '''create an image-to-segmentation dataset.
 
     '''
-    parser = ImageToSegmentationRecordParser(
-        image_dtype=tf.uint8, segm_dtype=tf.uint8, fixed_ndim=3)
+    parser = ImageToSegmentationRecordParser(image_dtype=tf.uint8,
+                                             segm_dtype=tf.uint8,
+                                             fixed_ndim=3)
 
     img_shape = (16, 16, 1)
     segm_shape = img_shape
@@ -117,13 +119,91 @@ class SegmentationDatasetSetup(Setup):
         '''
         counter = 0
         while True:
-            image = np.random.randint(
-                0, 255, np.prod(self.img_shape),
-                dtype=np.uint8).reshape(self.img_shape)
-            segm = np.ones(
-                self.segm_shape, dtype=np.uint8) * counter % self.n_classes
+            image = np.random.randint(0,
+                                      255,
+                                      np.prod(self.img_shape),
+                                      dtype=np.uint8).reshape(self.img_shape)
+            segm = np.ones(self.segm_shape,
+                           dtype=np.uint8) * counter % self.n_classes
             yield image, segm
             counter += 1
+
+
+class OrderedDatasetSetup(Setup):
+    '''create an image-to-segmentation dataset with a single value per image.
+
+    '''
+    parser = ImageToSegmentationRecordParser(image_dtype=tf.uint8,
+                                             segm_dtype=tf.uint8,
+                                             fixed_ndim=3)
+
+    img_shape = (1, 1, 1)
+    segm_shape = img_shape
+    n_classes = 3
+
+    def _generator(self):
+        '''generates images of random noise and label maps as
+        function of the sample count.
+        '''
+        counter = 0
+        while True:
+            image = np.ones(self.img_shape, dtype=np.uint8) * counter
+            segm = np.ones(self.segm_shape,
+                           dtype=np.uint8) * counter % self.n_classes
+            yield image, segm
+            counter += 1
+
+
+def test_inifinite_balanced_dataset(tmpdir):
+
+    tmpdir1 = tmpdir / 'rec1'
+    tmpdir1.mkdir()
+
+    tmpdir2 = tmpdir / 'rec2'
+    tmpdir2.mkdir()
+
+    setup1 = OrderedDatasetSetup(n_files=1,
+                                 n_samples_per_file=7,
+                                 output_folder=tmpdir1)
+
+    setup2 = OrderedDatasetSetup(n_files=1,
+                                 n_samples_per_file=3,
+                                 output_folder=tmpdir2)
+
+    patterns = [setup1.fname_pattern, setup2.fname_pattern]
+
+    # check with balanced option
+    dataset = create_dataset(patterns,
+                             batch_size=1,
+                             parser_fn=setup1.parser.parse,
+                             shuffle=False,
+                             balance_records=True)
+
+    seq1 = [i % 7 for i in range(10)]
+    seq2 = [i % 3 for i in range(10)]
+    #interleave (order in which records are loaded is random)
+    expected_seq_alternativeA = np.asarray(
+        [i for j in zip(seq1, seq2) for i in j])
+    expected_seq_alternativeB = np.asarray(
+        [i for j in zip(seq2, seq1) for i in j])
+
+    loaded_seq = np.asarray(
+        [int(d['image'].numpy().squeeze()) for d in dataset.take(20)])
+
+    compA = (expected_seq_alternativeA == loaded_seq).sum()
+    compB = (expected_seq_alternativeB == loaded_seq).sum()
+    assert (compA == 20) or (compB == 20)
+
+    # check without balanced option
+    dataset = create_dataset(patterns,
+                             batch_size=1,
+                             parser_fn=setup1.parser.parse,
+                             shuffle=False,
+                             balance_records=False)
+
+    expected_seq = [0, 0, 1, 1, 2, 2, 3, 4, 5, 6]
+    loaded_seq = [int(d['image'].numpy().squeeze()) for d in dataset]
+    np.testing.assert_array_equal(loaded_seq, expected_seq)
 
 
 @pytest.mark.parametrize(
@@ -138,14 +218,13 @@ def test_create_dataset_clf(tmpdir, n_files, n_samples_per_file, batch_size,
     setup = ClassificationDatasetSetup(n_files, n_samples_per_file, tmpdir)
 
     # load dataset.
-    dataset = create_dataset(
-        setup.fname_pattern,
-        batch_size,
-        setup.parser.parse,
-        shuffle_buffer=5,
-        shuffle=shuffle,
-        drop_remainder=drop_remainder,
-        cache_after_parse=cache_after_parse)
+    dataset = create_dataset(setup.fname_pattern,
+                             batch_size,
+                             setup.parser.parse,
+                             shuffle_buffer=5,
+                             shuffle=shuffle,
+                             drop_remainder=drop_remainder,
+                             cache_after_parse=cache_after_parse)
 
     counter = 0
     for batch in dataset:
@@ -188,14 +267,13 @@ def test_create_dataset_segm(tmpdir, n_files, n_samples_per_file, batch_size,
     setup = SegmentationDatasetSetup(n_files, n_samples_per_file, tmpdir)
 
     # load dataset.
-    dataset = create_dataset(
-        setup.fname_pattern,
-        batch_size,
-        setup.parser.parse,
-        shuffle_buffer=5,
-        shuffle=shuffle,
-        drop_remainder=drop_remainder,
-        cache_after_parse=cache_after_parse)
+    dataset = create_dataset(setup.fname_pattern,
+                             batch_size,
+                             setup.parser.parse,
+                             shuffle_buffer=5,
+                             shuffle=shuffle,
+                             drop_remainder=drop_remainder,
+                             cache_after_parse=cache_after_parse)
 
     counter = 0
     for batch in dataset:
@@ -236,14 +314,13 @@ def test_create_dataset_with_patches(tmpdir, batch_size, patch_size):
     setup = SegmentationDatasetSetup(2, 7, tmpdir)
 
     # load dataset.
-    dataset = create_dataset(
-        setup.fname_pattern,
-        batch_size,
-        setup.parser.parse,
-        patch_size=patch_size,
-        shuffle_buffer=5,
-        drop_remainder=drop_remainder,
-        cache_after_parse=False)
+    dataset = create_dataset(setup.fname_pattern,
+                             batch_size,
+                             setup.parser.parse,
+                             patch_size=patch_size,
+                             shuffle_buffer=5,
+                             drop_remainder=drop_remainder,
+                             cache_after_parse=False)
 
     counter = 0
     for batch in dataset:
@@ -320,18 +397,18 @@ def test_training_from_dataset(tmpdir):
         return sample['image'], sample['segm']
 
     # load dataset.
-    dataset = create_dataset(
-        setup.fname_pattern,
-        batch_size,
-        setup.parser.parse,
-        patch_size=patch_size,
-        shuffle_buffer=5,
-        drop_remainder=drop_remainder,
-        transforms=[
-            random_axis_flip(axis=1, flip_prob=0.5),
-            random_axis_flip(axis=0, flip_prob=0.5), _dict_to_tuple
-        ],
-        cache_after_parse=False)
+    dataset = create_dataset(setup.fname_pattern,
+                             batch_size,
+                             setup.parser.parse,
+                             patch_size=patch_size,
+                             shuffle_buffer=5,
+                             drop_remainder=drop_remainder,
+                             transforms=[
+                                 random_axis_flip(axis=1, flip_prob=0.5),
+                                 random_axis_flip(axis=0, flip_prob=0.5),
+                                 _dict_to_tuple
+                             ],
+                             cache_after_parse=False)
 
     # create model
     model = tf.keras.models.Sequential([
@@ -366,19 +443,18 @@ def test_training_with_multioutput(tmpdir):
         This also creates a fake multitarget output.
 
         '''
-        return sample['image'], (
-            sample['label'], 2 * tf.reduce_mean(sample['image']) * tf.ones(3))
+        return sample['image'], (sample['label'], 2 *
+                                 tf.reduce_mean(sample['image']) * tf.ones(3))
 
     # load dataset.
-    dataset = create_dataset(
-        setup.fname_pattern,
-        batch_size,
-        setup.parser.parse,
-        patch_size=None,
-        shuffle_buffer=5,
-        drop_remainder=drop_remainder,
-        transforms=[_dict_to_multi_tuple],
-        cache_after_parse=False)
+    dataset = create_dataset(setup.fname_pattern,
+                             batch_size,
+                             setup.parser.parse,
+                             patch_size=None,
+                             shuffle_buffer=5,
+                             drop_remainder=drop_remainder,
+                             transforms=[_dict_to_multi_tuple],
+                             cache_after_parse=False)
 
     # create model and train
     def _construct_model():
@@ -387,14 +463,14 @@ def test_training_with_multioutput(tmpdir):
         '''
 
         first_input = tf.keras.layers.Input(shape=(None, None, 1))
-        x = tf.keras.layers.Conv2D(
-            4, kernel_size=3, padding='same')(first_input)
+        x = tf.keras.layers.Conv2D(4, kernel_size=3,
+                                   padding='same')(first_input)
         x = tf.keras.layers.GlobalAveragePooling2D()(x)
         first_output = tf.keras.layers.Dense(1, name='first')(x)
         second_output = tf.keras.layers.Dense(3, name='second')(x)
 
-        return tf.keras.Model(
-            inputs=[first_input], outputs=[first_output, second_output])
+        return tf.keras.Model(inputs=[first_input],
+                              outputs=[first_output, second_output])
 
     model = _construct_model()
     model.compile(loss={'first': 'mse', 'second': 'mae'})
@@ -432,15 +508,14 @@ def test_training_with_multioutput_dict(tmpdir):
         }
 
     # load dataset.
-    dataset = create_dataset(
-        setup.fname_pattern,
-        batch_size,
-        setup.parser.parse,
-        patch_size=None,
-        shuffle_buffer=5,
-        drop_remainder=drop_remainder,
-        transforms=[_dict_to_tuple],
-        cache_after_parse=False)
+    dataset = create_dataset(setup.fname_pattern,
+                             batch_size,
+                             setup.parser.parse,
+                             patch_size=None,
+                             shuffle_buffer=5,
+                             drop_remainder=drop_remainder,
+                             transforms=[_dict_to_tuple],
+                             cache_after_parse=False)
 
     # create model and train
     def _construct_model():
@@ -448,17 +523,17 @@ def test_training_with_multioutput_dict(tmpdir):
 
         '''
 
-        first_input = tf.keras.layers.Input(
-            shape=(None, None, 1), name='image')
-        x = tf.keras.layers.Conv2D(
-            4, kernel_size=3, padding='same')(first_input)
+        first_input = tf.keras.layers.Input(shape=(None, None, 1),
+                                            name='image')
+        x = tf.keras.layers.Conv2D(4, kernel_size=3,
+                                   padding='same')(first_input)
         x = tf.keras.layers.GlobalAveragePooling2D()(x)
 
         first_output = tf.keras.layers.Dense(1, name='first')(x)
         second_output = tf.keras.layers.Dense(3, name='second')(x)
 
-        return tf.keras.Model(
-            inputs=[first_input], outputs=[first_output, second_output])
+        return tf.keras.Model(inputs=[first_input],
+                              outputs=[first_output, second_output])
 
     model = _construct_model()
     model.compile(loss={'first': 'mse', 'second': 'mae'})

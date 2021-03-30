@@ -11,7 +11,8 @@ from .cropping import random_crop
 def parse_from_tfrecords(filename_pattern,
                          parser_fn,
                          cycle_length=None,
-                         num_parallel_calls=tf.data.experimental.AUTOTUNE):
+                         num_parallel_calls=tf.data.experimental.AUTOTUNE,
+                         balance_records=False):
     '''create a tf.data.Dataset from several tfrecord files.
 
     Parameters
@@ -26,6 +27,9 @@ def parse_from_tfrecords(filename_pattern,
         Cycle length for interleaved reading. Default: number of matched files.
     num_parallel_calls : int
         Number of parallel calls for parsing. Default: AUTOTUNE.
+    balance_records : bool
+        if True, balances the records by repeating them independently before 
+        interleaving. Creates an infinite dataset.
 
     Returns
     -------
@@ -47,10 +51,16 @@ def parse_from_tfrecords(filename_pattern,
     # collect files.
     filenames = tf.data.Dataset.list_files(filename_pattern)
 
+    if balance_records:
+        load_record_fun = lambda x: tf.data.TFRecordDataset(x).repeat()
+    else:
+        load_record_fun = tf.data.TFRecordDataset
+
     # read from all with interleave...
-    dataset = filenames.interleave(tf.data.TFRecordDataset,
-                                   cycle_length=cycle_length,
-                                   num_parallel_calls=num_parallel_calls)
+    dataset = filenames.interleave(
+        load_record_fun,
+        cycle_length=cycle_length,
+        num_parallel_calls=num_parallel_calls)
     # ...and parse the samples.
     dataset = dataset.map(parser_fn, num_parallel_calls=num_parallel_calls)
     return dataset
@@ -64,7 +74,8 @@ def create_dataset(filename_pattern,
                    shuffle=True,
                    drop_remainder=True,
                    cache_after_parse=False,
-                   patch_size=None):
+                   patch_size=None,
+                   balance_records=False):
     '''create a tf.data.Dataset pipeline to stream training or validation data from
     from several tfrecords.
 
@@ -90,6 +101,9 @@ def create_dataset(filename_pattern,
         Cache samples after reading and parsing.
     patch_size : tuple or None
         Shape of patch to sample. Set to None if no patch sampling is desired.
+    balance_records : bool
+        if True, balances the records by repeating them independently before 
+        interleaving. Creates an infinite dataset.
 
     Returns
     -------
@@ -113,7 +127,8 @@ def create_dataset(filename_pattern,
     with tf.device('/cpu:0'):  # place dataset pipeline on cpu.
         dataset = parse_from_tfrecords(filename_pattern,
                                        parser_fn=parser_fn,
-                                       num_parallel_calls=num_parallel_calls)
+                                       num_parallel_calls=num_parallel_calls,
+                                       balance_records=balance_records)
 
         if cache_after_parse:
             dataset = dataset.cache()
