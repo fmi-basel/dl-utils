@@ -26,6 +26,6 @@ setup(
         'pytest',
         'pyyaml',
         'h5py',
-        'tensorflow-addons==0.11.2'
+        'tensorflow-addons'
     ],
     zip_safe=False)
