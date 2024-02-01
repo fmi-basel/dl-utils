@@ -16,7 +16,7 @@ setup(
         'tests',
     ]),
     install_requires=[
-        'numpy<=1.19.5',  # numpy 1.2 incomptabile with tensorflow 2.3, see https://stackoverflow.com/questions/66207609/notimplementederror-cannot-convert-a-symbolic-tensor-lstm-2-strided-slice0-t
+        'numpy',
         'scipy',
         'tensorflow>=2.3',
         'scikit-image>=0.13',
